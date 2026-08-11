@@ -1,5 +1,9 @@
 # client (`@devdigest/web`) — agent notes
 
+Next.js 15 App Router + React 19. A delta over the root map — read root
+`CLAUDE.md` first for the stack, the pnpm/npm split, and the vendored
+do-not-touch zones.
+
 ## Commands
 
 ```sh
@@ -24,20 +28,18 @@ pnpm test         # vitest + jsdom, fetch mocked — no API needed
 
 ## Gotchas
 
-- API base is `NEXT_PUBLIC_API_BASE` (default `http://localhost:3001`). It is
-  read at build time — changing `.env` needs a dev-server restart.
+- API base is `NEXT_PUBLIC_API_BASE` (default `http://localhost:3001`), read at
+  build time — changing `.env` needs a dev-server restart.
 - Tests mock `fetch`, so a passing test proves nothing about real API shape. The
-  contract is enforced by `@devdigest/shared`, and the real journey by `../e2e`.
-
-## Do not touch
-
-- `src/vendor/ui` (`@devdigest/ui`) and `src/vendor/shared` — vendored. Change
-  `vendor/shared` only as a deliberate contract change, server side first.
+  contract is enforced by `@devdigest/shared`; the real journey by `../e2e`.
 
 ## Read when
 
-- Read `INSIGHTS.md` first for what was already tried here, and run the
-  `engineering-insights` skill at the end of the task to add to it.
-- Read `README.md` for the UI route map and which endpoints each page leans on.
-- Read `../server/README.md` when you need the exact shape of an endpoint.
-- Read `../e2e/README.md` when a change affects a seeded browser flow.
+- **First:** `INSIGHTS.md` — what was already tried and rejected here.
+- UI route map + which endpoints each page leans on → `README.md`.
+- Adding a page or a data hook → `docs/README.md`.
+- Designing a new studio screen → `specs/README.md`.
+- Needing the exact shape of an endpoint → `../server/README.md`.
+- A change that affects a seeded browser flow → `../e2e/README.md`.
+- **End of any non-trivial task:** run the `engineering-insights` skill to append
+  to `INSIGHTS.md`.

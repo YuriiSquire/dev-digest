@@ -83,14 +83,17 @@ Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 
 ## Read when
 
-- Read `TESTING.md` when adding a test or touching CI.
-- Read `docs/agent-prompts/` when changing a built-in agent's system prompt or
-  choosing a model.
-- Read `server/README.md` when adding or changing an API route.
-- Read `client/README.md` when adding a page or a data hook.
-- Read `reviewer-core/README.md` when touching prompt assembly, structured
-  output, or the grounding gate.
-- Read `e2e/README.md` before writing or debugging a browser flow.
-- Read `INSIGHTS.md` at repo root for decisions that span more than one package.
-- Use the `engineering-insights` skill to read or record an insight — it maps a
-  touched path to the right `INSIGHTS.md` and holds the format and quality bar.
+Each per-package `CLAUDE.md` auto-loads when you touch that package and carries
+its own `Read when`; this list is the cross-package layer.
+
+- Adding a test or touching CI → `TESTING.md`.
+- A built-in agent's system prompt or model choice → `docs/agent-prompts/`.
+- A cross-package feature's intent → `specs/README.md`.
+- Adding or changing an API route → `server/README.md`.
+- Adding a page or a data hook → `client/README.md`.
+- Touching prompt assembly, structured output, or the grounding gate →
+  `reviewer-core/README.md`.
+- Writing or debugging a browser flow → `e2e/README.md`.
+- Decisions that span more than one package → `INSIGHTS.md` (repo root).
+- Reading or recording an insight → run the `engineering-insights` skill; it maps
+  a touched path to the right `INSIGHTS.md` and holds the format and quality bar.

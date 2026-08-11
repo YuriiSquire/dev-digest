@@ -1,6 +1,7 @@
 # e2e (`@devdigest/e2e`) — agent notes
 
-**npm, not pnpm.** Own `package-lock.json`.
+**npm, not pnpm** (own `package-lock.json`). A delta over the root map — read
+root `CLAUDE.md` first for the stack and the pnpm/npm split.
 
 ## Commands
 
@@ -26,21 +27,20 @@ npm run typecheck
 ## Gotchas
 
 - **Flows assume a freshly-seeded DB with exactly one repo.** Flow `02` follows
-  the home redirect to the *first* repo. Your dev DB usually has other imported
-  repos, so plain `npm test` against it fails flows 02/04/05. Use
-  `npm run e2e:hermetic`.
-- **Never `docker compose down -v`** to fix this — `-v` deletes the
-  `devdigest_pgdata` volume and every real repo and review in it. The hermetic
-  runner exists precisely so you never need to touch the dev DB.
+  the home redirect to the *first* repo, so plain `npm test` against your dev DB
+  (which has other imported repos) fails flows 02/04/05. Use `npm run e2e:hermetic`
+  — it exists precisely so you never touch the dev DB (nor need `down -v`; see root).
 - This is a CLI wrapper, not a test framework: a failing step fails the flow with
   the raw agent-browser exit, so read stderr rather than expecting a matcher diff.
 
 ## Read when
 
-- Read `INSIGHTS.md` first for what was already tried here, and run the
-  `engineering-insights` skill at the end of the task to add to it.
-- Read `README.md` for the flow format and the full hermetic-runner walkthrough.
-- Read `docs/` for this package's written specs — `specs/` holds executable
-  `*.flow.json` files, so prose lives in `docs/` instead.
-- Read `../client/README.md` when a flow breaks after a UI route change.
-- Read `../TESTING.md` for where this suite sits in the overall strategy.
+- **First:** `INSIGHTS.md` — what was already tried and rejected here.
+- Flow format + full hermetic-runner walkthrough → `README.md`.
+- Prose specs for this package → `docs/README.md` (`specs/` holds executable
+  `*.flow.json`, so prose lives in `docs/`).
+- Adding a new `NN-name.flow.json` → `specs/README.md`.
+- A flow breaks after a UI route change → `../client/README.md`.
+- Where this suite sits in the overall strategy → `../TESTING.md`.
+- **End of any non-trivial task:** run the `engineering-insights` skill to append
+  to `INSIGHTS.md`.

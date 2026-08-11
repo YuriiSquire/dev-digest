@@ -16,6 +16,24 @@ move it into `docs/` and delete it here.
 
 ## Decisions
 
+### 2026-08-11 — CLAUDE.md is a map-not-docs delta over root, by example
+
+**What:** every per-package `CLAUDE.md` follows one skeleton (`Commands` /
+`Conventions` / `Gotchas` / `Read when`) and is a *delta* over root — root
+always loads, so modules never repeat the stack, the pnpm/npm split, or the
+global do-not-touch. Docs are reached only through CONDITIONAL `condition →
+` + "`path`" triggers in a mandatory `Read when` block that links all doc types
+present (README/docs/specs/INSIGHTS); `@import` is banned (it would eager-load
+full docs every session). Nested `server/src/modules/repo-intel/CLAUDE.md`
+auto-loads on touch and records findings into `server/INSIGHTS.md` (it has none
+of its own).
+**Why:** a bloated `CLAUDE.md` drowns rules in noise ("context rot"); the file
+loads every session, so it must point, not duplicate.
+**Rejected:** a `docs/claude-md-convention.md` template — the convention lives
+by example in the six existing files instead, so there is no second source to
+drift. Also rejected dropping `e2e/docs/` for tree symmetry: `e2e/specs/` holds
+executable `*.flow.json`, so prose specs have nowhere else to live.
+
 ### 2026-07-31 — Standalone packages instead of a workspace
 
 **What:** four packages, each with its own `package.json` and lockfile; sharing
