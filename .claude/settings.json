@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/insights-read-reminder.sh\"",
+            "timeout": 10,
+            "statusMessage": "engineering-insights: read reminder"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/insights-record-gate.mjs\"",
+            "timeout": 15,
+            "statusMessage": "engineering-insights: record gate"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -25,9 +25,12 @@ Before answering a question or touching code:
 1. Resolve the module from the request using the table below.
 2. Read that `INSIGHTS.md` in full. It is capped and short — read it, don't grep.
 3. Read the root `INSIGHTS.md` as well when the work spans two or more packages.
-4. **Say in one line which file you read and whether it was relevant.** Example:
-   `Read server/INSIGHTS.md — nothing on SSE.` A silent read gets skipped; the
-   sentence is what makes it real.
+4. **Say in one line which file you read and what you will use from it.** If
+   nothing applies: `Read server/INSIGHTS.md — nothing on SSE.` If something
+   does, **name the entry, don't just say "relevant":** `Read server/INSIGHTS.md
+   — following the compute-once counter pattern (2026-08-04).` Naming it forces
+   you to actually apply it and proves the read happened; a silent read gets
+   skipped.
 
 If a curated file answers the question, cite it instead of re-deriving from
 code. This is the order root `CLAUDE.md` already sets out: `specs/` → `docs/` →
@@ -55,11 +58,32 @@ Edge cases that get misfiled:
 
 ## Step 2 — Record last (conditional)
 
+Recording happens at the end, but *noticing* happens throughout. When something
+non-obvious surfaces mid-task — a correction, a dead end, a quirk — flag it as a
+one-line note and keep working. Do **not** write it into `INSIGHTS.md` the
+moment it happens: wait until the fix is confirmed, or the record captures a
+guess that was later wrong. At the end, the flags you were carrying become the
+candidates below.
+
 ### 2a. Gate — is there anything to record?
 
 Judge the session by feel, not by counting. A typo, a rename, a routine feature
 that went exactly as expected → **write nothing, say "nothing worth recording",
 stop.** Recording noise is worse than recording nothing.
+
+Length is not the signal. A 30-second correction can be worth recording and a
+two-hour slog can be worth nothing — what matters is whether a real problem,
+decision, or discovery actually happened. Two tests sharpen the call:
+
+- **Would a future session act differently for having read it?** If not — even
+  after a long slog — it is noise. The bar is saving the next session real time,
+  not restating what they would work out anyway.
+- **Did you have to ask, dig, or get corrected to get unstuck?** Then the next
+  session hits the same wall — the strongest signal there is to record.
+
+One filter kills a common false positive: **do not record findings about code
+that is actively changing** — the entry goes stale before it is read. Capture
+the durable constraint, not the churn.
 
 If something non-obvious did happen, collect candidates and rank them — highest
 signal first:
@@ -76,15 +100,28 @@ looks worth writing, the bar is being applied too loosely.
 
 ### 2b. Write
 
+**Append-only, in place — never overwrite.** Add to an `INSIGHTS.md` with a
+**targeted `Edit`** that inserts or refines one span. **Never** use the `Write`
+tool on an existing `INSIGHTS.md`, and never reproduce the whole file to change
+one part of it — that is how the preamble, the section headings, and other
+sessions' entries get clobbered. The only content you may remove is spelled out
+below (a stale or superseded entry during a deliberate prune — and even a fixed
+warning is *marked*, not deleted); everything else already in the file must
+survive your edit unchanged.
+
 For each surviving candidate:
 
-1. **Read the target file** before writing it.
+1. **Read the target file** before editing it, so your `Edit` matches the real
+   surrounding text and you can see what is already there.
 2. **Check for a duplicate** — `grep -i '<key identifier>' <module>/INSIGHTS.md`.
    If a near-duplicate is there, **refine that entry** — sharpen the claim,
    update the date, add the evidence — instead of appending a near-copy.
-3. **Append** under the right section, newest first within that section.
-4. If an entry contradicts an existing one, do **not** write both. Correct the
-   old one and note what changed.
+3. **Insert** under the right section, newest first within that section — an
+   `Edit` that adds your entry next to the existing ones, leaving them intact.
+4. If a candidate contradicts an existing entry — including one in a *different*
+   section (e.g. `What Works` says always do X while this says X fails here) — do
+   **not** write both. Reconcile: correct or qualify the old one and note what
+   changed.
 
 Never delete an entry that still holds. When something an entry warns about gets
 fixed in code, don't delete it either — mark it, so the next reader knows the
@@ -137,7 +174,8 @@ Every other section takes a dated bullet — claim first, evidence last:
 
 House style: hard-wrap at ~79 columns, backtick every path and identifier, quote
 the **actual** error string, and end with a `path:line` or a runnable command
-wherever one exists.
+wherever one exists. Keep each entry **atomic** — one insight per bullet; if it
+carries two claims, split it.
 
 ## The bar
 
@@ -160,6 +198,10 @@ therefore useful nowhere.
 - When an entry becomes stable reference material, **promote it into
   `<module>/docs/` and delete it here.** That path is what keeps these short.
 - An entry that no longer holds is worse than no entry. Correct or mark it.
+- **Prune before you append when a file is already long or self-contradictory:**
+  merge near-duplicates into the sharper one, mark entries the code has since
+  fixed, delete ones that no longer hold. Trim on the way in — a file nobody
+  trims rots into noise faster than one nobody writes to.
 
 ## Anti-patterns
 
@@ -176,3 +218,25 @@ therefore useful nowhere.
 It captures insights only. It does not review code, write documentation, update
 `specs/`, or run tests. `INSIGHTS.md` is not a session diary — it holds durable
 findings, not a record of what happened.
+
+## Two things to keep honest
+
+- **Entries are a draft, not gospel.** This skill can mis-summarize what
+  happened, so an entry is a high-confidence starting point — not a verified
+  fact. Treat a surprising one as a lead to check, not a truth to act on blind,
+  and let a human spot-check keep the files trustworthy. When you record a claim
+  you could not verify, tag it inline `[unverified]` so the next session checks
+  it before trusting it — better than dropping it or asserting it as fact.
+  Entries also reflect what was true when written: if one names a file,
+  function, or flag, confirm it still exists before relying on it.
+- **The trigger is now hook-enforced.** Recording used to depend on someone
+  remembering to run this skill — the weak link. Two committed hooks (wired in
+  `.claude/settings.json`) close it: a `Stop` hook
+  (`.claude/hooks/insights-record-gate.mjs`) blocks the first end-of-session
+  stop **when the session edited files** and makes the agent run this record
+  pass; a `SessionStart` hook (`.claude/hooks/insights-read-reminder.sh`)
+  injects the read-first reminder. The Stop hook does **not** write anything
+  itself and makes no separate model call — the harness hands it the session
+  transcript as JSON on stdin, it only decides whether to force the pass, and
+  the model still applies the gate above (a trivial session records nothing).
+  It guards against loops via `stop_hook_active` and fails open on any error.
