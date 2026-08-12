@@ -42,6 +42,16 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-12** — A hover popover rendered inside a PR-list cell is clipped by
+  the list card's `overflow: hidden`. The FINDINGS-column dropdown
+  (`PRFindingsCell`) only becomes visible once `s.tableCard.overflow` is flipped
+  to `"visible"` (`client/src/app/repos/[repoId]/pulls/styles.ts:94`). Trade-off:
+  the card then no longer clips child row borders to its rounded corners — re-check
+  the row corners after changing it. The cell also `stopPropagation`s its own
+  `onClick` so hovering the (non-interactive) findings chips doesn't trigger the
+  row's navigate-on-click.
+  `client/src/app/repos/[repoId]/pulls/_components/PRFindingsCell/PRFindingsCell.tsx`
+
 - **2026-08-04** — Before adding a new hook/endpoint to show "more detail on
   X" in a component, check whether the detail is already fetched elsewhere on
   the same page and can be threaded down as a prop instead. `RunHistory` only
@@ -54,6 +64,19 @@ _None yet._
   API/hook. `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingsTab/FindingsTab.tsx:75`
 
 ## Tool & Library Notes
+
+- **2026-08-12** — Supersedes the seed claim in the 2026-08-04 note below: the
+  seed CHANGED. The active seeded repo is now
+  `squire-technologies/squire-mobile-commander` (old `acme/payments-api` still
+  exists but is findings-free; `myasoid/dev-digest` + `quarkusio/quarkus` are
+  gone). It carries ~8 completed `agent_runs` with `findings_count > 0` and
+  non-null `critical/warning/suggestion_count`, so findings UI (PR-list FINDINGS
+  column + hover dropdown) renders against REAL seed data — no row injection
+  needed. Note `psql` is not on the host PATH; query via the container:
+  `docker exec $(docker ps --filter publish=5432 -q) psql -U devdigest -d devdigest -tAc "select r.full_name, count(*) filter (where ar.findings_count>0) from repos r join pull_requests pr on pr.repo_id=r.id join agent_runs ar on ar.pr_id=pr.id and ar.status='done' group by 1"`.
+  The injection recipe + playwright fallback below still apply (chromium build
+  mismatch reconfirmed: cached 1228 vs required 1234 → rerun `npx playwright
+  install chromium`).
 
 - **2026-08-04** — This dev environment's seeded Postgres has zero
   `agent_runs` rows with `findings_count > 0` across all 3 seeded repos
@@ -71,6 +94,17 @@ _None yet._
   a small driver script is the fallback for one-off browser verification here.
 
 ## Recurring Errors & Fixes
+
+- **2026-08-12** — Asserting content from a **lazily-fetched** hover dropdown (a
+  data hook mounted only once the popover opens, e.g. `PRFindingsCell` →
+  `usePrReviews`) needs BOTH timer modes: open the popover under
+  `vi.useFakeTimers()` + `act(() => vi.advanceTimersByTime(150))` (the hover
+  delay), then switch back to `vi.useRealTimers()` **before** `await findBy*` /
+  `waitFor`, so the TanStack Query promise can settle and RTL can poll for the
+  resolved content. Fake timers alone flip `aria-expanded` but never resolve the
+  fetch, so the finding detail never appears. Restore real timers +
+  `vi.unstubAllGlobals()` in a `finally`.
+  `client/src/app/repos/[repoId]/pulls/_components/PRFindingsCell/PRFindingsCell.test.tsx`
 
 - **2026-08-04** — `fireEvent.mouseEnter` on a component whose hover-open
   logic uses `setTimeout` (e.g. an open delay to survive a mouse
