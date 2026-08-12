@@ -1,0 +1,15 @@
+{
+  "name": "PR list FINDINGS column shows severity chips and a hover dropdown",
+  "description": "On the seeded repo's PR list, PR #501 ('Cache pricing tiers in Redis…') has a completed run, so its FINDINGS cell renders severity chips (2 CRITICAL / 3 WARNING / 1 SUGGESTION) behind an aria-label='6 findings' button. Hovering the cell lazy-fetches GET /pulls/:id/reviews and opens the [role=tooltip] dropdown (header '6 findings') listing each finding's title + file:line. PR #482 has a review but no completed run, so its findings cell stays a muted em-dash — asserted as best-effort via the em-dash's presence on the list (the runner can't scope to a non-<tr> row). Read-only seeded data (no model call); assumes the freshly-seeded hermetic DB (see e2e/README.md). Covers PRFindingsCell + FindingsHoverCard.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR list data settles" },
+    { "cmd": ["wait", "--text", "Cache pricing tiers in Redis to cut checkout latency"], "label": "target PR #501 row is visible" },
+    { "cmd": ["wait", "--text", "—"], "label": "a never-reviewed PR renders the muted em-dash in its findings cell (best-effort)" },
+    { "cmd": ["find", "role", "button", "hover", "--name", "6 findings"], "label": "hover the findings cell (aria-label='6 findings' = 2+3+1 chips)" },
+    { "cmd": ["wait", "--text", "6 FINDINGS"], "label": "hover dropdown opens with its 'N FINDINGS' header (agent-browser matches the CSS-uppercased rendered text)" },
+    { "cmd": ["wait", "--text", "Unbounded cache key from user input"], "label": "dropdown lists the top CRITICAL finding's title" },
+    { "cmd": ["wait", "--text", "src/cache/pricing.ts:34"], "label": "dropdown shows that finding's file:line MonoLink" }
+  ]
+}
