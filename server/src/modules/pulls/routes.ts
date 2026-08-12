@@ -113,8 +113,9 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
 
     // Latest-review SCORE per PR for the list's score ring. Computed on read
     // from reviews (no FK denorm); the list is small, so one IN-query + JS
-    // grouping is cheap. (The per-severity FINDINGS breakdown is intentionally
-    // not surfaced on the list — findings live on the PR detail page.)
+    // grouping is cheap. (The per-severity FINDINGS breakdown is now surfaced on
+    // the list too — see the latest-run block below, which carries the
+    // denormalized counts from the same latest completed run as the cost.)
     const prIds = rows.map((r) => r.id);
     const latestReviewByPr = new Map<string, { score: number | null }>();
     if (prIds.length > 0) {
@@ -129,27 +130,61 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
-    // Latest-run COST per PR for the list's cost column. Same shape as the score
-    // block above: one IN-query, newest-first, first-seen-per-PR wins. This is
-    // deliberately the LATEST COMPLETED run's cost, not a sum over all runs —
-    // the column answers "what does reviewing this PR cost", not "what have I
-    // spent on it". Only status='done' rows count, so a later failed run cannot
-    // blank out the last successful one.
+    // COST + per-severity FINDINGS per PR for the list's cost and findings
+    // columns, from one IN-query over completed runs (newest-first). The two
+    // columns answer different questions, so they roll up differently:
+    //   • COST     = the single LATEST completed run's cost (first-seen per PR):
+    //                "what does reviewing this PR cost", not a running total.
+    //   • FINDINGS = the SUM across each AGENT's latest completed run. A reviewer
+    //                scanning the list must see what EVERY agent flagged, not
+    //                just whichever finished last. Summed, not deduped (two
+    //                agents flagging the same line count twice — the list hover
+    //                attributes by agent). We aggregate the DENORMALIZED per-run
+    //                counters here, never a JOIN over `findings` (INSIGHTS
+    //                2026-08-04): the counters are the gate-time snapshot and
+    //                must not drift from `blockers`' semantics.
+    // Only status='done' rows count, so a failed run cannot blank a good one.
     const latestCostByPr = new Map<string, number | null>();
+    const findingsByPr = new Map<string, { critical: number; warning: number; suggestion: number }>();
     if (prIds.length > 0) {
       const runRows = await container.db
-        .select({ prId: t.agentRuns.prId, costUsd: t.agentRuns.costUsd })
+        .select({
+          prId: t.agentRuns.prId,
+          runId: t.agentRuns.id,
+          agentId: t.agentRuns.agentId,
+          costUsd: t.agentRuns.costUsd,
+          criticalCount: t.agentRuns.criticalCount,
+          warningCount: t.agentRuns.warningCount,
+          suggestionCount: t.agentRuns.suggestionCount,
+        })
         .from(t.agentRuns)
         .where(and(inArray(t.agentRuns.prId, prIds), eq(t.agentRuns.status, 'done')))
         .orderBy(desc(t.agentRuns.ranAt));
+      // `${prId}:${agentId ?? runId}` — marks an agent's latest run as counted.
+      // Falls back to run id when the agent was deleted (agent_id null) so those
+      // runs aren't collapsed into one bucket.
+      const seenAgent = new Set<string>();
       for (const run of runRows) {
-        if (run.prId && !latestCostByPr.has(run.prId)) latestCostByPr.set(run.prId, run.costUsd);
+        if (!run.prId) continue;
+        // COST: newest completed run for the PR wins (rows are newest-first).
+        if (!latestCostByPr.has(run.prId)) latestCostByPr.set(run.prId, run.costUsd);
+        // FINDINGS: add each agent's latest run once — the first row seen per
+        // (pr, agent) is that agent's latest.
+        const agentKey = `${run.prId}:${run.agentId ?? run.runId}`;
+        if (seenAgent.has(agentKey)) continue;
+        seenAgent.add(agentKey);
+        const acc = findingsByPr.get(run.prId) ?? { critical: 0, warning: 0, suggestion: 0 };
+        acc.critical += run.criticalCount ?? 0;
+        acc.warning += run.warningCount ?? 0;
+        acc.suggestion += run.suggestionCount ?? 0;
+        findingsByPr.set(run.prId, acc);
       }
     }
 
     const now = Date.now();
     return rows.map((r) => {
       const review = latestReviewByPr.get(r.id);
+      const findings = findingsByPr.get(r.id);
       return {
         id: r.id,
         number: r.number,
@@ -172,6 +207,9 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
         cost_usd: latestCostByPr.get(r.id) ?? null,
+        critical_count: findings ? findings.critical : null,
+        warning_count: findings ? findings.warning : null,
+        suggestion_count: findings ? findings.suggestion : null,
       };
     });
   });

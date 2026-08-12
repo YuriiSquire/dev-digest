@@ -65,6 +65,8 @@
     "title": "Pull Requests",
     "summary": "{open} open · {needsReview} need review",
     "loading": "Loading pull requests…",
+    "findingsLoading": "Loading…",
+    "findingsByAgentTitle": "{count} findings · {agents} agents",
     "status": {
       "open": "Open",
       "closed": "Closed",
@@ -91,6 +93,7 @@
       "author": "Author",
       "size": "Size",
       "score": "Score",
+      "findings": "Findings",
       "status": "Status",
       "cost": "Cost",
       "updated": "Updated"

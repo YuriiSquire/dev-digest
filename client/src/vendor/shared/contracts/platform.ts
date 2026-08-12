@@ -173,6 +173,16 @@ export const PrMeta = z.object({
   // USD cost of the LATEST COMPLETED run (list endpoint only). Deliberately not
   // a sum across runs. Null until a run completes, or when the model is unpriced.
   cost_usd: z.number().nullish(),
+  // Per-severity finding tally AGGREGATED across every agent's latest completed
+  // run (list endpoint only): the SUM of each agent's latest run, so the list
+  // reflects what ALL agents flagged, not just the one that finished last.
+  // Summed, not deduped — a finding two agents both flag counts twice; the list
+  // hover breaks it down by agent. Nullish until a run completes / on
+  // pre-existing rows — like score/cost. (Cost, by contrast, is the single
+  // latest run's — not a sum.)
+  critical_count: z.number().int().nullish(),
+  warning_count: z.number().int().nullish(),
+  suggestion_count: z.number().int().nullish(),
 });
 export type PrMeta = z.infer<typeof PrMeta>;
 
