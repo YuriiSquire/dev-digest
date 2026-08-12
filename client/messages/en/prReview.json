@@ -67,6 +67,8 @@
     "loading": "Loading pull requests…",
     "findingsLoading": "Loading…",
     "findingsByAgentTitle": "{count} findings · {agents} agents",
+    "findingsBySeverity": "Show {severity} findings",
+    "noFindings": "No findings",
     "status": {
       "open": "Open",
       "closed": "Closed",
