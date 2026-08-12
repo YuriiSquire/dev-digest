@@ -42,14 +42,17 @@ _None yet._
 
 ## Codebase Patterns
 
-- **2026-08-12** — A hover popover rendered inside a PR-list cell is clipped by
-  the list card's `overflow: hidden`. The FINDINGS-column dropdown
-  (`PRFindingsCell`) only becomes visible once `s.tableCard.overflow` is flipped
-  to `"visible"` (`client/src/app/repos/[repoId]/pulls/styles.ts:94`). Trade-off:
-  the card then no longer clips child row borders to its rounded corners — re-check
-  the row corners after changing it. The cell also `stopPropagation`s its own
-  `onClick` so hovering the (non-interactive) findings chips doesn't trigger the
-  row's navigate-on-click.
+- **2026-08-12** — A popover rendered inside a PR-list cell is clipped by the
+  list card's `overflow: hidden`. The FINDINGS-column dropdown (`PRFindingsCell`)
+  only becomes visible once `s.tableCard.overflow` is flipped to `"visible"`
+  (`client/src/app/repos/[repoId]/pulls/styles.ts:94`). Trade-off: the card then
+  no longer clips child row borders to its rounded corners — re-check the row
+  corners after changing it. The cell's severity chips are `<button>`s: clicking
+  one opens the dropdown filtered to THAT severity (click the active chip again /
+  Escape / an outside `mousedown` closes it); the row wrapper `stopPropagation`s
+  so clicking a chip doesn't trigger the row's navigate-on-click. Filtering runs
+  over the already-cached `usePrReviews` payload in memory — switching severities
+  does NOT refetch.
   `client/src/app/repos/[repoId]/pulls/_components/PRFindingsCell/PRFindingsCell.tsx`
 
 - **2026-08-04** — Before adding a new hook/endpoint to show "more detail on
@@ -95,16 +98,19 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
-- **2026-08-12** — Asserting content from a **lazily-fetched** hover dropdown (a
-  data hook mounted only once the popover opens, e.g. `PRFindingsCell` →
-  `usePrReviews`) needs BOTH timer modes: open the popover under
-  `vi.useFakeTimers()` + `act(() => vi.advanceTimersByTime(150))` (the hover
-  delay), then switch back to `vi.useRealTimers()` **before** `await findBy*` /
-  `waitFor`, so the TanStack Query promise can settle and RTL can poll for the
-  resolved content. Fake timers alone flip `aria-expanded` but never resolve the
-  fetch, so the finding detail never appears. Restore real timers +
-  `vi.unstubAllGlobals()` in a `finally`.
-  `client/src/app/repos/[repoId]/pulls/_components/PRFindingsCell/PRFindingsCell.test.tsx`
+- **2026-08-12** — Asserting content from a **lazily-fetched** dropdown (a data
+  hook mounted only once the popover opens) that opens on a `setTimeout` HOVER
+  delay needs BOTH timer modes: open under `vi.useFakeTimers()` +
+  `act(() => vi.advanceTimersByTime(150))` (the hover delay), then switch back to
+  `vi.useRealTimers()` **before** `await findBy*` / `waitFor`, so the TanStack
+  Query promise can settle and RTL can poll for the resolved content. Fake timers
+  alone flip `aria-expanded` but never resolve the fetch, so the detail never
+  appears. Restore real timers + `vi.unstubAllGlobals()` in a `finally`.
+  **Corrected 2026-08-12:** `PRFindingsCell` moved to a CLICK trigger (no
+  open-delay), so its test now just does `fireEvent.click` + `await findBy*`
+  under real timers — no fake timers. This pattern now applies only to the
+  hover-delayed timeline chips.
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/RunHistory/RunHistory.test.tsx`
 
 - **2026-08-04** — `fireEvent.mouseEnter` on a component whose hover-open
   logic uses `setTimeout` (e.g. an open delay to survive a mouse
