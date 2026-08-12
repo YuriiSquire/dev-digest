@@ -71,17 +71,21 @@ _None yet._
   `server/src/vendor/shared/contracts/trace.ts` /
   `client/src/vendor/shared/contracts/trace.ts`
 
-- **2026-08-01** — Per-run LLM cost is already computed end-to-end; the only
-  thing ever missing is persistence. Every provider returns `costUsd` on its
-  result, and for OpenRouter it is the REAL billed figure — the client asks for
-  it with `usage: { include: true }` and reads `usage.cost`, falling back to the
-  injected `PriceBook` estimator. `reviewPullRequest` then sums it across
-  map-reduce chunks onto `ReviewOutcome.costUsd`. Commit `d45ab0d` removed the
-  cost *feature* by dropping that one field at the destructure in
-  `run-executor.ts` and deleting the `agent_runs.cost_usd` column, leaving the
-  computation intact. So surfacing cost anywhere costs **zero extra model
-  calls** — wire up the existing field, never add a pricing lookup or a second
-  request. `reviewer-core/src/review/run.ts:216`
+- **2026-08-12** — Per-run LLM cost is wired end-to-end AND surfaced in the UI on
+  all three review surfaces: the PR-list COST column (`PrMeta.cost_usd` = the
+  latest *completed* run's cost, deliberately not a sum), the PR-detail
+  Agent-runs timeline ("N tok · $X"), and the run trace drawer's COST stat tile.
+  Computing it costs **zero extra model calls**: every provider returns `costUsd`,
+  and for OpenRouter it is the REAL billed figure — the request sets
+  `usage: { include: true }` and reads `usage.cost`, falling back to the injected
+  `PriceBook` estimator; `reviewPullRequest` sums it across map-reduce chunks onto
+  `ReviewOutcome.costUsd`, and the server persists it to `agent_runs.cost_usd` at
+  completion. Rule everywhere: a null cost (unpriced model, or a run that never
+  reached the model) renders "—", never "$0.00". History — it was removed in
+  `d45ab0d` (+ `58c6ac7`) then re-added across every surface in `d186657`, so any
+  earlier version of this note claiming the column/feature was dropped is
+  obsolete. `server/src/db/schema/runs.ts:26`,
+  `client/src/components/run-cost-badge/RunCostBadge.tsx`, spec `specs/01-run-cost.md`
 
 ## Tool & Library Notes
 
