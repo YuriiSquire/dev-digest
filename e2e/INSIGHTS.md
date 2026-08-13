@@ -71,6 +71,21 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-08-13** — agent-browser's native video recorder (`record start <p.webm>`
+  … `record stop`) shells out to **ffmpeg** to encode; with no `ffmpeg` on PATH
+  `record stop` fails `ffmpeg not found or failed to execute` and the clip is
+  lost (frames are not buffered to disk). Worse, a failed `stop` leaves the
+  recorder wedged: the next `record start` prints `Recording already active`
+  yet captures nothing, so `stop` then reports `No frames captured`. Recovery is
+  `record stop` **then** `close --all` to fully reset before recording again.
+  Fix once with `brew install ffmpeg`. Output is VP8 `.webm` at the viewport
+  size (headed run → ~10 fps). Not used by the flow runner; only for demos.
+- **2026-08-13** — the PR-list findings severity chips are `<button>`s with an
+  **`aria-label`** (`Show WARNING findings` etc.), not a `<label>` element, so
+  `find label "Show WARNING findings"` fails `Element not found`. Use
+  `find role button --name "Show WARNING findings"`. The popup groups by agent
+  and headers as `N FINDINGS · M AGENTS` (uppercase — see the transform note
+  below). `client/src/app/repos/[repoId]/pulls/_components/PRFindingsCell/`
 - **2026-08-12** — agent-browser `wait --text` / `find text` match the
   **CSS-rendered** text, so `text-transform: uppercase` defeats a lowercase
   query: the FindingsHoverCard header renders "6 FINDINGS", and
