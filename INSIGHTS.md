@@ -69,6 +69,24 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-14** — The backend already implements onion / ports-and-adapters /
+  clean architecture in full — it is just never *named*: a grep for
+  `onion|hexagonal|ports.?and.?adapters|clean architecture` across the repo
+  returns nothing, so you cannot find the pattern by searching for the concept.
+  The rings: ports (interfaces) in `server/src/vendor/shared/adapters.ts`,
+  adapters in `server/src/adapters/*`, DI composition root in
+  `server/src/platform/container.ts` (lazy getters typed by the port, returning
+  the test override else the concrete impl), layered modules
+  `routes.ts → service.ts → repository.ts` (repository = the only Drizzle layer),
+  and the pure DI engine `reviewer-core/` (deps injected via `ReviewInput`, no
+  I/O). Nuance: full port/adapter inversion is applied to *external* systems
+  (LLM/GitHub/git/…) only; repositories are concrete classes injected with `Db`,
+  and the one module-level facade *interface* is `RepoIntel`
+  (`server/src/modules/repo-intel/types.ts`). Before "adding" clean architecture
+  or refactoring toward ports/adapters, read the `onion-architecture` skill
+  (`.claude/skills/onion-architecture/`) — it names and enforces the existing
+  pattern rather than introducing a new one.
+
 - **2026-08-12** — `server/src/db/seed.ts` (the demo seed) is SHARED across two
   suites: 8 server `*.it.test.ts` files import and run `seed()`, and the `e2e`
   hermetic suite seeds from it too. So editing the demo seed is load-bearing for
@@ -107,7 +125,14 @@ _None yet._
 
 ## Tool & Library Notes
 
-_None yet._
+- **2026-08-14** — `.claude/skills/README.md` (line 3) claims skills are mirrored
+  to Cursor via a `.cursor/skills → ../.claude/skills` symlink, but **that symlink
+  does not exist** — there is no `.cursor/` directory in the repo at all (control
+  test: even `frontend-architecture` is unreachable through it). So skills are
+  discoverable only at the canonical `.claude/skills/` path; do not rely on the
+  documented Cursor mirror. To actually honor the doc:
+  `ln -s ../.claude/skills .cursor/skills` (needs `.cursor/` created first).
+  `.claude/skills/README.md:3`
 
 ## Recurring Errors & Fixes
 
