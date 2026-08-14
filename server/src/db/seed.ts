@@ -175,6 +175,146 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     ]);
   }
 
+  // ---- PR #501 (pricing cache) — drives the PR-list FINDINGS column ----
+  // Unlike PR #482 (a `reviews` row but no completed run), this PR also has a
+  // `status='done'` agent_runs row carrying the denormalized per-severity counts
+  // that the pulls-list route reads for the FINDINGS chips. Kept deliberately
+  // self-consistent: 2 CRITICAL + 3 WARNING + 1 SUGGESTION = 6, matching the
+  // review's 6 findings that the hover dropdown lazy-fetches. Isolated from #482
+  // so existing flows (which key off "Add rate limiting…") don't shift.
+  let [prCache] = await db
+    .select()
+    .from(t.pullRequests)
+    .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, 501)));
+  if (!prCache) {
+    [prCache] = await db
+      .insert(t.pullRequests)
+      .values({
+        workspaceId,
+        repoId,
+        number: 501,
+        title: 'Cache pricing tiers in Redis to cut checkout latency',
+        author: 'devon.hale',
+        branch: 'feat/pricing-cache',
+        base: 'main',
+        headSha: 'f0e1d2c3b4a5',
+        additions: 190,
+        deletions: 22,
+        filesCount: 5,
+        status: 'needs_review',
+        body: 'Cache pricing tiers in Redis so the checkout hot path stops hitting Postgres on every quote.',
+      })
+      .returning();
+
+    const [cacheReview] = await db
+      .insert(t.reviews)
+      .values({
+        workspaceId,
+        prId: prCache!.id,
+        kind: 'review',
+        verdict: 'request_changes',
+        summary:
+          'Good latency win, but the cache key is attacker-controllable, stale prices can be served after a tier update, and several entries never expire.',
+        score: 48,
+        model: 'seed',
+      })
+      .returning();
+
+    // 2 CRITICAL + 3 WARNING + 1 SUGGESTION = 6, matching the run counts below.
+    await db.insert(t.findings).values([
+      {
+        reviewId: cacheReview!.id,
+        file: 'src/cache/pricing.ts',
+        startLine: 34,
+        endLine: 34,
+        severity: 'CRITICAL',
+        category: 'security',
+        title: 'Unbounded cache key from user input',
+        rationale: 'The cache key concatenates the raw `plan` query param, so a client can spray unlimited distinct keys and exhaust Redis memory.',
+        suggestion: 'Validate `plan` against the known tier set before using it in the key.',
+        confidence: 0.95,
+      },
+      {
+        reviewId: cacheReview!.id,
+        file: 'src/cache/pricing.ts',
+        startLine: 58,
+        endLine: 61,
+        severity: 'CRITICAL',
+        category: 'bug',
+        title: 'Stale price served after tier update',
+        rationale: 'Tier writes never invalidate the cache, so checkout can quote an old price until the TTL lapses.',
+        suggestion: 'Bust the pricing key on tier mutation, or key by tier version.',
+        confidence: 0.9,
+      },
+      {
+        reviewId: cacheReview!.id,
+        file: 'src/cache/redis.ts',
+        startLine: 20,
+        endLine: 20,
+        severity: 'WARNING',
+        category: 'perf',
+        title: 'Missing TTL on cached pricing entry',
+        rationale: 'SET is issued without an expiry, so entries live until eviction.',
+        suggestion: 'Pass an explicit EX matching the pricing refresh window.',
+        confidence: 0.82,
+      },
+      {
+        reviewId: cacheReview!.id,
+        file: 'src/checkout/quote.ts',
+        startLine: 77,
+        endLine: 77,
+        severity: 'WARNING',
+        category: 'bug',
+        title: 'Cache miss falls through to a null price',
+        rationale: 'On a miss the helper returns undefined and the caller renders `$NaN`.',
+        suggestion: 'Fall back to the DB lookup on a miss instead of returning undefined.',
+        confidence: 0.8,
+      },
+      {
+        reviewId: cacheReview!.id,
+        file: 'src/cache/redis.ts',
+        startLine: 12,
+        endLine: 12,
+        severity: 'WARNING',
+        category: 'security',
+        title: 'Redis URL used without TLS enforcement',
+        rationale: 'The client accepts a plaintext `redis://` URL, so pricing data can travel unencrypted.',
+        suggestion: 'Require `rediss://` (TLS) outside local dev.',
+        confidence: 0.7,
+      },
+      {
+        reviewId: cacheReview!.id,
+        file: 'src/cache/pricing.ts',
+        startLine: 5,
+        endLine: 5,
+        severity: 'SUGGESTION',
+        category: 'style',
+        title: 'Extract the magic TTL constant',
+        rationale: 'The literal `900` appears twice; name it so the intent is clear.',
+        suggestion: 'Hoist a `PRICING_TTL_SECONDS` constant.',
+        confidence: 0.55,
+      },
+    ]);
+
+    // Completed run with the denormalized per-severity tally the LIST reads for
+    // the FINDINGS chips (2/3/1). Fixed ranAt keeps ordering deterministic.
+    await db.insert(t.agentRuns).values({
+      workspaceId,
+      prId: prCache!.id,
+      ranAt: new Date('2026-08-01T00:00:00.000Z'),
+      provider: 'seed',
+      model: 'seed',
+      status: 'done',
+      source: 'local',
+      costUsd: 0.0123,
+      findingsCount: 6,
+      score: 48,
+      criticalCount: 2,
+      warningCount: 3,
+      suggestionCount: 1,
+    });
+  }
+
   // ---- built-in agents (the three starter presets) ----
   // Prompt bodies live in ./seed-prompts.ts (mirrored in docs/agent-prompts/*.md).
   const seedAgents: Array<typeof t.agents.$inferInsert> = [

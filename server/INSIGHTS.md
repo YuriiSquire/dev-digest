@@ -51,6 +51,19 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-12** — The PR-list FINDINGS column aggregates ACROSS agents by
+  **summing the denormalized per-run counters** — never a JOIN over `findings`
+  (consistent with the 2026-08-04 note below). `GET /repos/:id/pulls`
+  (`pulls/routes.ts`) takes the latest `status='done'` run **per (pr, agent)**
+  (`ranAt desc`, first-seen wins, keyed `` `${prId}:${agentId ?? runId}` ``) and
+  sums their `critical/warning/suggestion_count` into `PrMeta.*_count`. It is
+  deliberately NOT deduped — two agents flagging the same file:line count twice —
+  because there is no finding fingerprint (file+line+rule) anywhere in the schema
+  to dedup on; the list hover attributes findings by agent instead. COST in the
+  same rollup stays the single latest run's (not summed), so the two columns
+  diverge on purpose. `server/src/modules/pulls/routes.ts`
+  (findingsByPr / latestCostByPr), spec `specs/03-findings-aggregate.md`.
+
 - **2026-08-04** — `agent_runs` counters (`findings_count`, `blockers`, and now
   `critical_count`/`warning_count`/`suggestion_count`) are denormalized onto the
   run row once, at run completion in `run-executor.ts`, and never recomputed —

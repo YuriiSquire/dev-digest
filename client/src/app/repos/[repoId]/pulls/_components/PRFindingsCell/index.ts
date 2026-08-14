@@ -1,0 +1,1 @@
+export { PRFindingsCell } from "./PRFindingsCell";

@@ -88,7 +88,10 @@ export const s = {
     margin: "14px 32px 44px",
     border: "1px solid var(--border)",
     borderRadius: 10,
-    overflow: "hidden",
+    // `visible` (not `hidden`) so the findings-cell hover dropdown can drop
+    // below a row without being clipped by the card. Trade-off: child row
+    // borders are no longer clipped to the rounded corners.
+    overflow: "visible",
     background: "var(--bg-elevated)",
   } satisfies CSSProperties,
   headRow: {

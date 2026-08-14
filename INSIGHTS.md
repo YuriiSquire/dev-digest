@@ -61,6 +61,16 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-12** — `server/src/db/seed.ts` (the demo seed) is SHARED across two
+  suites: 8 server `*.it.test.ts` files import and run `seed()`, and the `e2e`
+  hermetic suite seeds from it too. So editing the demo seed is load-bearing for
+  both — after ANY change, run the DB-backed suite (`cd server && pnpm exec
+  vitest run .it.test`, needs Docker/testcontainers). `pnpm typecheck` and the
+  hermetic units (`--exclude '**/*.it.test.ts'`) will NOT catch a seeded-data
+  assertion the change breaks. Confirmed safe to extend idempotently (guard the
+  block by PR number, unique title so e2e flows keyed on other PRs don't shift):
+  adding a demo PR left all 34 it-tests green. `server/src/db/seed.ts`
+
 - **2026-08-04** — `server/src/vendor/shared/contracts/*.ts` and
   `client/src/vendor/shared/contracts/*.ts` are two independent files with no
   sync script between them — a schema change must be hand-edited in both
