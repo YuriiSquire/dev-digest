@@ -48,4 +48,5 @@ Each subagent returns a JSON array of:
 ```
 
 `category` is the skill that produced the finding, so the report can attribute
-each line to its lens.
+each line to its lens. Deterministic pre-gate checks (Step 3b) use fixed
+categories `contract-sync` and `typecheck` instead of a skill name.

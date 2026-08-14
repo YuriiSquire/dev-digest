@@ -113,6 +113,32 @@ double-reviewed (routing table lives in `references/routing.md`):
 Never send a backend file to a UI reviewer or vice-versa, and never classify a
 `server/clones/**` path.
 
+## Step 3b — Deterministic pre-gate (no LLM tokens)
+
+Run these cheap, deterministic checks **before** the fan-out. Each emits normal
+findings that feed the Step 5 gate; a `critical` here already means the verdict is
+BLOCK (you may still run the fan-out for a fuller report).
+
+**1. Contract sync — critical.** `@devdigest/shared` exists as two hand-synced
+copies with **no sync script**: `server/src/vendor/shared/contracts/<name>.ts` and
+`client/src/vendor/shared/contracts/<name>.ts` (identical basenames). If the diff
+changes one side's `<name>.ts` but not the other side's same-name file →
+**critical** (`contract drift: client copy of <name>.ts not updated`). It compiles
+locally and fails invisibly later when the two drift on a real field, so it must
+block. Convention (root `CLAUDE.md`): change `shared` first, then consumers.
+
+**2. Per-package typecheck — critical on failure.** For each package the diff
+touches, run its typecheck, respecting the pnpm/npm split:
+
+| Package touched | Command |
+| --- | --- |
+| `client/**`, `server/**` | `cd <pkg> && pnpm typecheck` |
+| `reviewer-core/**`, `e2e/**` | `cd <pkg> && npm run typecheck` |
+
+A non-zero exit → **critical**, with the first errors pasted as the finding. This
+is the cheapest way to catch the check-1 contract drift (the omitted client copy
+fails to compile) and any type regression — before a single LLM token is spent.
+
 ## Step 4 — Fan out review subagents
 
 For each active `(skill × file-bucket)` pair, spawn a `general-purpose` review
@@ -126,6 +152,11 @@ gets:
   the subagent to "invoke the skill": a subagent has no skill catalog and cannot
   call the Skill tool. Reading the `SKILL.md` file is what actually works.
 - the **file paths and their diff bodies** for that bucket,
+- the rule that **findings must anchor to lines the diff actually changed** — a
+  finding on pre-existing/legacy code outside the diff hunks is out of scope and
+  must not be raised (it would block a PR over code this change did not touch). The
+  subagent may read surrounding context for understanding, but only reports on
+  added/modified lines.
 - the **severity rubric**, delivered the same way — the subagent `Read`s this
   skill's `references/severity.md` by absolute path,
 - a required **structured return**: a JSON array of findings, each
