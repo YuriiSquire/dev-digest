@@ -53,7 +53,15 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## What Works
 
-_None yet._
+- **2026-08-14** — When building research-backed docs/skills from subagent web
+  research, spot-check claim→source FIDELITY by re-fetching the cited pages — not
+  just that the URLs resolve. A URL-reachability pass (`curl -sI`, 30/31 `200`) on
+  the new `.claude/skills/frontend-architecture` skill was clean, yet re-reading
+  sources against each claim caught a real misattribution: guidance credited to
+  Kent C. Dodds's "When to Break Up a Component" that the article does not make.
+  Method that worked: fan out one verify-agent per source, each returning
+  SUPPORTED / PARTIAL / NOT FOUND per claim with a supporting quote.
+  `.claude/skills/frontend-architecture/README.md`
 
 ## What Doesn't Work
 
