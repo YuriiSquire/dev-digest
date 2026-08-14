@@ -69,6 +69,15 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-14** — `feat/*` branches fork from **`develop`, not `main`** — this repo
+  is GitFlow, which contradicts root `CLAUDE.md` ("Main branch (you will usually use
+  this for PRs): main"). So any tool that diffs "the PR" must resolve the base
+  dynamically, not hard-code `main`: nearest-ancestor wins. Measured on `feat/lab02`:
+  `git rev-list --count develop..HEAD` = 3 vs `main..HEAD` = 14, so `develop` is the
+  real base. The `pr-self-review` skill resolves it as: existing PR's
+  `gh pr view --json baseRefName` → else min `rev-list --count <cand>..HEAD` over
+  {develop, main} → else `origin/HEAD`. `.claude/skills/pr-self-review/SKILL.md` (Step 0)
+
 - **2026-08-14** — The backend already implements onion / ports-and-adapters /
   clean architecture in full — it is just never *named*: a grep for
   `onion|hexagonal|ports.?and.?adapters|clean architecture` across the repo
@@ -124,6 +133,15 @@ _None yet._
   `client/src/components/run-cost-badge/RunCostBadge.tsx`, spec `specs/01-run-cost.md`
 
 ## Tool & Library Notes
+
+- **2026-08-14** — A skill that wants to fan work out to subagents CANNOT tell them
+  to "invoke skill X": a subagent gets no skill-catalog system-reminder, so it has
+  no sanctioned way to call the Skill tool. Have the subagent **`Read` the target
+  `SKILL.md` (+ its `references/`) by absolute path** instead — every agent type has
+  `Read`. Also pick the agent type deliberately: `Explore` is a read-only *locator*
+  that reads excerpts and is documented NOT to audit, so it can't do a judged,
+  full-diff lens review — use `general-purpose` for that. Both learned building
+  `pr-self-review`'s Step 4. `.claude/skills/pr-self-review/SKILL.md`
 
 - **2026-08-14** — `.claude/skills/README.md` (line 3) claims skills are mirrored
   to Cursor via a `.cursor/skills → ../.claude/skills` symlink, but **that symlink
