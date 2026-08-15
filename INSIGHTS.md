@@ -175,7 +175,15 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
-_None yet._
+- **2026-08-15** — `gh pr create` fails here with a misleading `No commits between
+  develop and <branch> / Head ref must be a branch / Base/Head sha can't be blank`
+  because **git `origin` and the `gh` default repo differ**: `origin` is the fork
+  `YuriiSquire/dev-digest` (where feature branches + `develop` live and get pushed),
+  but `gh` defaults to `upstream` `ai-agentic-engineering-neo/dev-digest` (which has
+  no reachable `develop`). Fix: target the fork explicitly —
+  `gh pr create --repo YuriiSquire/dev-digest --base develop --head <branch>` (or
+  `gh repo set-default YuriiSquire/dev-digest` once). Confirm intent before ever
+  aiming a PR at the `upstream` org — that is an outward-facing action. `git remote -v`
 
 ## Open Questions
 
