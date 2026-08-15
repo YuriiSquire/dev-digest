@@ -227,10 +227,20 @@ export class AgentsRepository {
    * the list are unlinked.
    */
   async setSkills(agentId: string, skillIds: string[]): Promise<void> {
-    await this.db.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
-    if (skillIds.length === 0) return;
-    await this.db
-      .insert(t.agentSkills)
-      .values(skillIds.map((skillId, i) => ({ agentId, skillId, order: i })));
+    // Dedupe defensively: the link PK is (agent_id, skill_id), so a repeated id in
+    // the payload would violate it. Preserve first-seen order.
+    const unique = [...new Set(skillIds)];
+    // Atomic replace. A bare delete-then-insert is NOT safe under concurrent link
+    // writes (e.g. a single drag firing both `drop` and `dragend`): the two
+    // requests interleave and the second insert collides on the PK
+    // (`agent_skills_agent_id_skill_id_pk`). The transaction serializes writers on
+    // the agent's rows so the replace is all-or-nothing.
+    await this.db.transaction(async (tx) => {
+      await tx.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
+      if (unique.length === 0) return;
+      await tx
+        .insert(t.agentSkills)
+        .values(unique.map((skillId, i) => ({ agentId, skillId, order: i })));
+    });
   }
 }

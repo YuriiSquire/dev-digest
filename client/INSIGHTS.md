@@ -42,6 +42,16 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-15** — The sidebar `NAV` groups are defined ONLY in vendored
+  `client/src/vendor/ui/nav.ts` and consumed directly by the vendored `Sidebar`
+  plus app-shell `useGlobalShortcuts`/`useShellCommands` — there is NO app-level
+  seam to inject a group. Adding one (e.g. the "SKILLS LAB" section) therefore
+  means editing the vendored file, a deliberate exception to root `CLAUDE.md`'s
+  vendor do-not-touch rule. The app is pre-wired for these entries:
+  `activeKeyFor` (`src/components/app-shell/helpers.ts`) already maps `/skills`,
+  `/conventions`, `/eval`, and the agent breadcrumb hardcodes "Skills Lab".
+  `client/src/vendor/ui/nav.ts`
+
 - **2026-08-12** — A popover rendered inside a PR-list cell is clipped by the
   list card's `overflow: hidden`. The FINDINGS-column dropdown (`PRFindingsCell`)
   only becomes visible once `s.tableCard.overflow` is flipped to `"visible"`

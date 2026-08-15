@@ -16,6 +16,27 @@ move it into `docs/` and delete it here.
 
 ## Decisions
 
+### 2026-08-15 — Skill usage stats are attributed at RUN level, not per finding
+
+**What:** `SkillStats` (pull_frequency / accept_rate / findings-by-category) is
+computed from a new `run_skills(run_id, skill_id)` join that `run-executor.ts`
+writes when it resolves an agent's *enabled* linked skills — i.e. "this skill was
+in the run's prompt", association not causation. A finding still maps only to
+`reviews.runId`; there is deliberately NO `skillId` on findings. Rates return
+null (UI renders "—") when the denominator is 0, never a fabricated 0.
+`server/src/db/schema/runs.ts` (run_skills), `server/src/modules/skills/repository.ts` (`stats()`).
+**Why:** a review's findings come from the whole assembled prompt — you cannot
+honestly attribute one finding to one skill. Note the Skills domain was already
+~60% scaffolded (tables `skills`/`skill_versions`/`agent_skills`, the
+`@devdigest/shared` contracts, the `## Skills / rules` prompt slot, the
+`PromptAssembly.skills` trace field, agent-side link routes, and the full client
+i18n) — when adding a "lesson" feature, grep `db/schema.ts` + `contracts/` +
+`messages/` FIRST; the scaffolding is usually there and only the CRUD module +
+wiring + UI are missing.
+**Rejected:** adding `skillId` to `findings` for per-skill accept-rate
+(unfalsifiable causation + a heavier migration); and fabricating pull/accept
+numbers to fill the Stats tiles.
+
 ### 2026-08-11 — CLAUDE.md is a map-not-docs delta over root, by example
 
 **What:** every per-package `CLAUDE.md` follows one skeleton (`Commands` /

@@ -6,6 +6,7 @@ import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
+  TEST_QUALITY_REVIEWER_PROMPT,
 } from './seed-prompts.js';
 
 /** Default provider/model for the built-in reviewer agents. */
@@ -351,6 +352,17 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       version: 1,
       createdBy: userId,
     },
+    {
+      workspaceId,
+      name: 'Test Quality Reviewer',
+      description: 'Flags uncovered branches, missed edge cases, over-mocking, and flaky tests.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: TEST_QUALITY_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
   ];
   for (const a of seedAgents) {
     const [existing] = await db
@@ -360,7 +372,221 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     if (!existing) await db.insert(t.agents).values(a);
   }
 
+  // ---- Skills feature demo: skills + agent_skills links + experiment PR ----
+  // The four starter skills for the Test Quality Reviewer, plus the agent_skills
+  // links that attach them, plus one experiment PR whose diff has an untested
+  // branch and a happy-path-only test for the reviewer to run against. All
+  // upsert-by-name / guarded so re-seeding is idempotent. Shared by the it-tests
+  // and the e2e flows, so nothing here may assume an empty starting state.
+  await seedSkills(db, workspaceId);
+  await seedExperimentPr(db, workspaceId, repoId);
+
   return { workspaceId, userId };
+}
+
+/**
+ * Seed the four starter skills for the Test Quality Reviewer and link them to
+ * that agent in `agent_skills` at order 0..3. Idempotent: skills upsert by
+ * (workspace, name); links use onConflictDoNothing (PK = agent+skill).
+ */
+async function seedSkills(db: Db, workspaceId: string): Promise<void> {
+  const skillDefs: Array<typeof t.skills.$inferInsert> = [
+    {
+      workspaceId,
+      name: 'uncovered-branches-rubric',
+      description: "Rubric for scoring which code branches the diff's tests actually exercise.",
+      type: 'rubric',
+      source: 'manual',
+      enabled: true,
+      body: `# Uncovered branches rubric
+
+Score the diff's tests by which control-flow branches they actually drive:
+
+- Every new \`if\`/\`else\`, \`switch\` case, ternary, and \`??\`/\`?.\` fallback in the
+  changed code needs a test that reaches it and asserts the outcome.
+- Every \`throw\` and rejected promise needs a test asserting it happens — and the
+  error type/message/status where callers depend on it.
+- A guard clause is two branches, not one: "guard fires" and "guard passes" are
+  separate cases.
+
+Rate CRITICAL when an untested branch sits on a data-loss, broken-contract, or
+crash path; WARNING for a lower-stakes path; nothing when every branch is driven.`,
+    },
+    {
+      workspaceId,
+      name: 'edge-case-checklist',
+      description: 'Checklist of null/empty/boundary inputs every test suite should cover.',
+      type: 'convention',
+      source: 'manual',
+      enabled: true,
+      body: `# Edge-case checklist
+
+Before approving a test suite, confirm each applicable case is covered:
+
+- Empty inputs: empty string, empty array/object, and the empty-collection code
+  path (not just a populated list).
+- Absent inputs: \`null\`, \`undefined\`, and missing optional fields.
+- Numeric edges: \`0\`, negatives, min/max, and the exact boundary/threshold value.
+- Collection edges: single element, first and last element, and off-by-one at the
+  limit (pagination, slicing).
+- Failure inputs: at least one invalid case for every "valid case" test.
+
+A branch that only ever sees a happy, populated, mid-range input is under-tested.`,
+    },
+    {
+      workspaceId,
+      name: 'mock-overuse-guard',
+      description: 'Guardrails against tests that assert the mock instead of the real code.',
+      type: 'custom',
+      source: 'manual',
+      enabled: true,
+      body: `# Mock-overuse guard
+
+Mocks isolate collaborators — they must never replace the unit under test:
+
+- Never mock the function you are testing, or stub so deeply that the assertion
+  reflects the mock's return value rather than the code's behaviour.
+- Prefer asserting on the observable result or persisted state over
+  \`expect(mock).toHaveBeenCalled()\` alone — a call-count check passes even when
+  the logic is wrong.
+- Avoid over-broad matchers (\`expect.anything()\`, a bare \`toBeDefined()\` where an
+  exact value is knowable, whole-object snapshots that dodge stating intent).
+
+Ask: if the real code were broken, would this test still pass? If yes, it is
+testing the mock, not the code.`,
+    },
+    {
+      workspaceId,
+      name: 'flaky-test-patterns',
+      description:
+        'Patterns that make tests flaky: real time, randomness, timing races, order coupling.',
+      type: 'custom',
+      source: 'extracted',
+      enabled: true,
+      body: `# Flaky test patterns
+
+Non-deterministic tests erode trust — catch these before merge:
+
+- Real time: asserting on \`Date.now()\`, \`new Date()\`, timers, or timezone instead
+  of a fixed/faked clock.
+- Unseeded randomness: \`Math.random()\`, UUIDs, or shuffles compared to a literal.
+- Timing races: \`setTimeout\`-based sleeps or unbounded polling instead of
+  deterministic waits; real network/filesystem I/O in a hermetic test.
+- Order coupling: asserting on the order of an unordered query, or leaking shared
+  mutable state / open handles between tests so results depend on run order.
+
+Pin the clock, seed the randomness, await a condition (not a delay), and keep each
+test self-contained.`,
+    },
+  ];
+
+  const skillIds: string[] = [];
+  for (const s of skillDefs) {
+    let [existing] = await db
+      .select()
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, s.name)));
+    if (!existing) [existing] = await db.insert(t.skills).values(s).returning();
+    skillIds.push(existing!.id);
+  }
+
+  // Link all four to the Test Quality Reviewer at order 0..3 (declaration order).
+  const [agent] = await db
+    .select()
+    .from(t.agents)
+    .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, 'Test Quality Reviewer')));
+  if (agent) {
+    for (let i = 0; i < skillIds.length; i++) {
+      await db
+        .insert(t.agentSkills)
+        .values({ agentId: agent.id, skillId: skillIds[i]!, order: i })
+        .onConflictDoNothing();
+    }
+  }
+}
+
+/**
+ * Seed one experiment PR (#517) for the Test Quality Reviewer to run against: its
+ * diff adds a retry helper whose max-attempts `throw` branch is never tested, and
+ * a happy-path-only test that only asserts the first-attempt success. Guarded by
+ * PR number so re-seeding is idempotent.
+ */
+async function seedExperimentPr(db: Db, workspaceId: string, repoId: string): Promise<void> {
+  const [existing] = await db
+    .select()
+    .from(t.pullRequests)
+    .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, 517)));
+  if (existing) return;
+
+  const [pr] = await db
+    .insert(t.pullRequests)
+    .values({
+      workspaceId,
+      repoId,
+      number: 517,
+      title: 'Add retry helper for flaky webhook dispatch',
+      author: 'priya.nandakumar',
+      branch: 'feat/webhook-retry',
+      base: 'main',
+      headSha: 'c7d8e9f0a1b2',
+      additions: 23,
+      deletions: 0,
+      filesCount: 2,
+      status: 'needs_review',
+      body: 'Retry webhook dispatch up to N times before giving up, with a happy-path test.',
+    })
+    .returning();
+
+  await db.insert(t.prFiles).values([
+    {
+      prId: pr!.id,
+      path: 'src/webhooks/dispatch.ts',
+      additions: 14,
+      deletions: 0,
+      // Adds a retry loop whose post-loop `throw` (all attempts failed) is a
+      // branch the test below never drives.
+      patch: `@@ -0,0 +1,14 @@
++export async function dispatchWithRetry(
++  send: (p: WebhookPayload) => Promise<DispatchResult>,
++  payload: WebhookPayload,
++  maxAttempts = 3,
++): Promise<DispatchResult> {
++  let lastErr: unknown;
++  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
++    try {
++      return await send(payload);
++    } catch (err) {
++      lastErr = err;
++    }
++  }
++  throw new Error('dispatch failed after ' + maxAttempts + ' attempts: ' + String(lastErr));
++}`,
+    },
+    {
+      prId: pr!.id,
+      path: 'src/webhooks/dispatch.test.ts',
+      additions: 9,
+      deletions: 0,
+      // Only exercises the first-attempt success — the retry loop and the
+      // max-attempts throw branch are unverified.
+      patch: `@@ -0,0 +1,9 @@
++import { it, expect, vi } from 'vitest';
++import { dispatchWithRetry } from './dispatch.js';
++
++it('returns the send result on the first attempt', async () => {
++  const send = vi.fn().mockResolvedValue({ ok: true });
++  expect(await dispatchWithRetry(send, { id: 'evt_1' })).toEqual({ ok: true });
++  expect(send).toHaveBeenCalledTimes(1);
++});`,
+    },
+  ]);
+
+  await db.insert(t.prCommits).values({
+    prId: pr!.id,
+    sha: 'c7d8e9f0a1b2',
+    message: 'Add dispatchWithRetry + happy-path test',
+    author: 'priya.nandakumar',
+  });
 }
 
 // CLI entrypoint
