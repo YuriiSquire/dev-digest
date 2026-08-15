@@ -54,7 +54,14 @@ _None yet._
 
 ## What Doesn't Work
 
-_None yet._
+- **2026-08-15** — `08-pr-list-findings.flow.json` fails on this repo regardless
+  of the working tree: its step `find role button hover --name "6 findings"`
+  HOVERS the findings cell, but `PRFindingsCell` moved to a CLICK trigger (see
+  client `INSIGHTS.md` 2026-08-12), so a hover never opens the dropdown and the
+  flow stalls at that step (7/8). Confirmed pre-existing by `git stash -u`-ing all
+  local changes and re-running — identical failure on the clean base, so it is NOT
+  a regression from whatever you just changed. Fix: change that step's `"hover"`
+  to `"click"`. `e2e/specs/08-pr-list-findings.flow.json:10`
 
 ## Codebase Patterns
 
@@ -70,6 +77,28 @@ _None yet._
   `server/src/db/seed.ts`, `e2e/specs/08-pr-list-findings.flow.json`
 
 ## Tool & Library Notes
+
+- **2026-08-15** — agent-browser pointer `click @ref` silently NO-OPS on a button
+  inside a `Drawer`/`Modal` portal (the "Import skill" button): the click returns
+  rc=0 but React's `onClick` never fires — the `@ref` goes stale after the button
+  re-renders from disabled→enabled, and the portal/overlay can swallow the pointer.
+  Symptom: no request in the API log despite a "successful" click. Fixes that
+  worked: dispatch a real DOM click via `agent-browser eval "[...document
+  .querySelectorAll('button')].find(b=>b.textContent.trim()==='Import skill')
+  .click()"` (React's delegated listener catches it), or re-`snapshot` for a fresh
+  ref immediately before each click. Same class of issue as native HTML5 drag:
+  fire `dragstart`+`dragover`, let React re-render, THEN `drop` in a separate tick
+  (a synchronous 3-event burst makes `onDrop` read the pre-render `orderIds`).
+
+- **2026-08-15** — agent-browser `find text "<exact>"` (and `find text ... first`)
+  MISSES text React splits across nested styled spans — e.g. a skill-card title
+  reported "not found" for all 4 seeded skills while a `screenshot` showed them
+  rendering fine. Don't conclude "the data didn't load" from a `find text` miss:
+  verify render with `screenshot` + `get text <sel>`, and to *interact*, take a
+  `snapshot` and click the element by its `@ref` (e.g. a card's enable `switch`
+  came back as `ref=e22` → `agent-browser click @e22`; refs re-number after a
+  re-render, so re-`snapshot` before the next click). Used to browser-verify the
+  Skills pages against a live isolated stack (pg :5433 / api :3101 / web :3100).
 
 - **2026-08-13** — agent-browser's native video recorder (`record start <p.webm>`
   … `record stop`) shells out to **ffmpeg** to encode; with no `ffmpeg` on PATH

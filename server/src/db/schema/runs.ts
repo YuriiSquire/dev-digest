@@ -1,7 +1,8 @@
-import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision, primaryKey } from 'drizzle-orm/pg-core';
 import { workspaces } from './core';
 import { agents } from './agents';
 import { pullRequests } from './pulls';
+import { skills } from './skills';
 
 // ============================================================ Observability
 
@@ -59,3 +60,22 @@ export const multiAgentRuns = pgTable('multi_agent_runs', {
     .references(() => pullRequests.id, { onDelete: 'cascade' }),
   ranAt: timestamp('ran_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+/**
+ * Which skills were PULLED into a run (enabled + linked at run time). One row per
+ * (run, skill). Backs skill-usage stats (pull frequency / accept rate / findings
+ * by category) at RUN level — a skill was present in the run's prompt, which is
+ * association, not per-finding causation.
+ */
+export const runSkills = pgTable(
+  'run_skills',
+  {
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => agentRuns.id, { onDelete: 'cascade' }),
+    skillId: uuid('skill_id')
+      .notNull()
+      .references(() => skills.id, { onDelete: 'cascade' }),
+  },
+  (table) => ({ pk: primaryKey({ columns: [table.runId, table.skillId] }) }),
+);

@@ -183,6 +183,25 @@ export class ReviewRunExecutor {
 
       const task = taskLine(pull) + rankNote;
 
+      // ---- Skills — linked + enabled skill bodies for the prompt -------------
+      // Resolve this agent's linked skills (ordered by `order` asc) and keep only
+      // the enabled ones. Their bodies render as the engine's '## Skills / rules'
+      // section (and land in assembly.skills of the trace). Each pulled skill is
+      // recorded in run_skills below for run-level skill-usage stats. Disabled
+      // links are skipped entirely — as if they weren't attached.
+      const links = await this.container.agentsRepo.linkedSkills(agent.id);
+      const pulled = links.filter((l) => l.skill.enabled);
+      if (pulled.length) {
+        runLog.info(`Skills — ${pulled.length} enabled skill(s) attached to the prompt`);
+        // The agent_runs row already exists (the service creates it up-front), so
+        // the run_skills FK is satisfiable here. onConflictDoNothing keeps this
+        // idempotent if the same runId is ever re-executed.
+        await this.container.db
+          .insert(schema.runSkills)
+          .values(pulled.map((l) => ({ runId, skillId: l.skill.id })))
+          .onConflictDoNothing();
+      }
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -195,6 +214,9 @@ export class ReviewRunExecutor {
         // Per-agent review strategy (configured in the Agent editor); falls back
         // to the studio default. single-pass = whole diff in one call.
         strategy: agent.strategy ?? REVIEW_STRATEGY,
+        // Linked + enabled skill bodies → engine renders '## Skills / rules'.
+        // Omit-when-empty so a skill-less agent's prompt is byte-identical.
+        ...(pulled.length ? { skills: pulled.map((l) => l.skill.body) } : {}),
         // T1.3 — pass the callers digest only when we built one. assemblePrompt
         // omits the section when this is empty/undefined.
         ...(callersDigest ? { callers: callersDigest } : {}),

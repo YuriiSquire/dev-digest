@@ -16,6 +16,27 @@ move it into `docs/` and delete it here.
 
 ## Decisions
 
+### 2026-08-15 — Skill usage stats are attributed at RUN level, not per finding
+
+**What:** `SkillStats` (pull_frequency / accept_rate / findings-by-category) is
+computed from a new `run_skills(run_id, skill_id)` join that `run-executor.ts`
+writes when it resolves an agent's *enabled* linked skills — i.e. "this skill was
+in the run's prompt", association not causation. A finding still maps only to
+`reviews.runId`; there is deliberately NO `skillId` on findings. Rates return
+null (UI renders "—") when the denominator is 0, never a fabricated 0.
+`server/src/db/schema/runs.ts` (run_skills), `server/src/modules/skills/repository.ts` (`stats()`).
+**Why:** a review's findings come from the whole assembled prompt — you cannot
+honestly attribute one finding to one skill. Note the Skills domain was already
+~60% scaffolded (tables `skills`/`skill_versions`/`agent_skills`, the
+`@devdigest/shared` contracts, the `## Skills / rules` prompt slot, the
+`PromptAssembly.skills` trace field, agent-side link routes, and the full client
+i18n) — when adding a "lesson" feature, grep `db/schema.ts` + `contracts/` +
+`messages/` FIRST; the scaffolding is usually there and only the CRUD module +
+wiring + UI are missing.
+**Rejected:** adding `skillId` to `findings` for per-skill accept-rate
+(unfalsifiable causation + a heavier migration); and fabricating pull/accept
+numbers to fill the Stats tiles.
+
 ### 2026-08-11 — CLAUDE.md is a map-not-docs delta over root, by example
 
 **What:** every per-package `CLAUDE.md` follows one skeleton (`Commands` /
@@ -53,13 +74,48 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## What Works
 
-_None yet._
+- **2026-08-14** — When building research-backed docs/skills from subagent web
+  research, spot-check claim→source FIDELITY by re-fetching the cited pages — not
+  just that the URLs resolve. A URL-reachability pass (`curl -sI`, 30/31 `200`) on
+  the new `.claude/skills/frontend-architecture` skill was clean, yet re-reading
+  sources against each claim caught a real misattribution: guidance credited to
+  Kent C. Dodds's "When to Break Up a Component" that the article does not make.
+  Method that worked: fan out one verify-agent per source, each returning
+  SUPPORTED / PARTIAL / NOT FOUND per claim with a supporting quote.
+  `.claude/skills/frontend-architecture/README.md`
 
 ## What Doesn't Work
 
 _None yet._
 
 ## Codebase Patterns
+
+- **2026-08-14** — `feat/*` branches fork from **`develop`, not `main`** — this repo
+  is GitFlow, which contradicts root `CLAUDE.md` ("Main branch (you will usually use
+  this for PRs): main"). So any tool that diffs "the PR" must resolve the base
+  dynamically, not hard-code `main`: nearest-ancestor wins. Measured on `feat/lab02`:
+  `git rev-list --count develop..HEAD` = 3 vs `main..HEAD` = 14, so `develop` is the
+  real base. The `pr-self-review` skill resolves it as: existing PR's
+  `gh pr view --json baseRefName` → else min `rev-list --count <cand>..HEAD` over
+  {develop, main} → else `origin/HEAD`. `.claude/skills/pr-self-review/SKILL.md` (Step 0)
+
+- **2026-08-14** — The backend already implements onion / ports-and-adapters /
+  clean architecture in full — it is just never *named*: a grep for
+  `onion|hexagonal|ports.?and.?adapters|clean architecture` across the repo
+  returns nothing, so you cannot find the pattern by searching for the concept.
+  The rings: ports (interfaces) in `server/src/vendor/shared/adapters.ts`,
+  adapters in `server/src/adapters/*`, DI composition root in
+  `server/src/platform/container.ts` (lazy getters typed by the port, returning
+  the test override else the concrete impl), layered modules
+  `routes.ts → service.ts → repository.ts` (repository = the only Drizzle layer),
+  and the pure DI engine `reviewer-core/` (deps injected via `ReviewInput`, no
+  I/O). Nuance: full port/adapter inversion is applied to *external* systems
+  (LLM/GitHub/git/…) only; repositories are concrete classes injected with `Db`,
+  and the one module-level facade *interface* is `RepoIntel`
+  (`server/src/modules/repo-intel/types.ts`). Before "adding" clean architecture
+  or refactoring toward ports/adapters, read the `onion-architecture` skill
+  (`.claude/skills/onion-architecture/`) — it names and enforces the existing
+  pattern rather than introducing a new one.
 
 - **2026-08-12** — `server/src/db/seed.ts` (the demo seed) is SHARED across two
   suites: 8 server `*.it.test.ts` files import and run `seed()`, and the `e2e`
@@ -99,11 +155,35 @@ _None yet._
 
 ## Tool & Library Notes
 
-_None yet._
+- **2026-08-14** — A skill that wants to fan work out to subagents CANNOT tell them
+  to "invoke skill X": a subagent gets no skill-catalog system-reminder, so it has
+  no sanctioned way to call the Skill tool. Have the subagent **`Read` the target
+  `SKILL.md` (+ its `references/`) by absolute path** instead — every agent type has
+  `Read`. Also pick the agent type deliberately: `Explore` is a read-only *locator*
+  that reads excerpts and is documented NOT to audit, so it can't do a judged,
+  full-diff lens review — use `general-purpose` for that. Both learned building
+  `pr-self-review`'s Step 4. `.claude/skills/pr-self-review/SKILL.md`
+
+- **2026-08-14** — `.claude/skills/README.md` (line 3) claims skills are mirrored
+  to Cursor via a `.cursor/skills → ../.claude/skills` symlink, but **that symlink
+  does not exist** — there is no `.cursor/` directory in the repo at all (control
+  test: even `frontend-architecture` is unreachable through it). So skills are
+  discoverable only at the canonical `.claude/skills/` path; do not rely on the
+  documented Cursor mirror. To actually honor the doc:
+  `ln -s ../.claude/skills .cursor/skills` (needs `.cursor/` created first).
+  `.claude/skills/README.md:3`
 
 ## Recurring Errors & Fixes
 
-_None yet._
+- **2026-08-15** — `gh pr create` fails here with a misleading `No commits between
+  develop and <branch> / Head ref must be a branch / Base/Head sha can't be blank`
+  because **git `origin` and the `gh` default repo differ**: `origin` is the fork
+  `YuriiSquire/dev-digest` (where feature branches + `develop` live and get pushed),
+  but `gh` defaults to `upstream` `ai-agentic-engineering-neo/dev-digest` (which has
+  no reachable `develop`). Fix: target the fork explicitly —
+  `gh pr create --repo YuriiSquire/dev-digest --base develop --head <branch>` (or
+  `gh repo set-default YuriiSquire/dev-digest` once). Confirm intent before ever
+  aiming a PR at the `upstream` org — that is an outward-facing action. `git remote -v`
 
 ## Open Questions
 

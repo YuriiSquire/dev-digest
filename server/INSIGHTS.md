@@ -89,11 +89,28 @@ _None yet._
 
 ## Tool & Library Notes
 
-_None yet._
+- **2026-08-15** — Each `*.it.test.ts` spins its OWN Postgres testcontainer in
+  `beforeAll` (`test/helpers/pg.ts` `startPg`). Running the whole suite in parallel
+  (11 files → 11 concurrent containers) is resource-bound on a laptop and fails
+  **non-deterministically** — e.g. a review run's `prompt_assembly` comes back
+  undefined because `waitForPrRuns` timed out, and the failing file set changes run
+  to run. A file that fails in the full run passes in isolation. For a reliable
+  local full run: `pnpm exec vitest run .it.test --no-file-parallelism` (serial,
+  ~36s, all green). Don't chase a "regression" from a flaky full-suite run before
+  re-running the failing file alone. `server/test/helpers/pg.ts`
 
 ## Recurring Errors & Fixes
 
-_None yet._
+- **2026-08-15** — `duplicate key value violates unique constraint
+  "agent_skills_agent_id_skill_id_pk"` on skill drag-reorder had TWO causes, fix
+  BOTH: (1) `AgentsRepository.setSkills` did a bare delete-then-insert — two
+  overlapping `POST /agents/:id/skills` interleave and the second insert collides;
+  wrap the delete+insert in `this.db.transaction(...)` and `[...new Set(skillIds)]`
+  to dedupe (a repeated id in one payload hits the same PK). (2) `SkillsTab`
+  persisted on BOTH `onDrop` and `onDragEnd`, so one drag fired two concurrent
+  writes; persist ONCE (on `dragend`; `dragover` already reorders live, `drop` just
+  `preventDefault`s). `server/src/modules/agents/repository.ts` (setSkills),
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/SkillsTab/SkillsTab.tsx`
 
 ## Open Questions
 

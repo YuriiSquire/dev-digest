@@ -140,6 +140,25 @@ export const CommunitySkill = z.object({
 });
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
+/**
+ * Skill usage stats, computed at RUN level from `run_skills` (a skill was pulled
+ * into a run's prompt), not per-finding causation. Rates are ratios in [0,1] or
+ * null when there is no data yet — the UI renders null as "—", never 0.
+ */
+export const SkillStats = z.object({
+  /** Distinct agents that link this skill. */
+  used_by_agents: z.number().int(),
+  agents_using: z.array(z.object({ agent_id: z.string(), name: z.string() })),
+  /** Runs that pulled this skill ÷ total runs of the linking agents. */
+  pull_frequency: z.number().min(0).max(1).nullable(),
+  /** Accepted ÷ (accepted + dismissed) over findings from runs that used this skill. */
+  accept_rate: z.number().min(0).max(1).nullable(),
+  /** Findings from runs that used this skill in the last 30 days. */
+  findings_30d: z.number().int(),
+  by_category: z.array(z.object({ category: z.string(), count: z.number().int() })),
+});
+export type SkillStats = z.infer<typeof SkillStats>;
+
 // ---- Conventions ----
 export const ConventionCandidate = z.object({
   id: z.string(),
