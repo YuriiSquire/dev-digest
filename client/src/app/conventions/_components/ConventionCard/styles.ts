@@ -19,6 +19,16 @@ export const s: Record<string, React.CSSProperties> = {
     color: "var(--text-secondary)",
     borderBottom: "1px solid var(--border)",
   },
+  pathLink: {
+    display: "block",
+    padding: "8px 12px",
+    fontSize: 12,
+    color: "var(--accent-text, var(--text-secondary))",
+    borderBottom: "1px solid var(--border)",
+    textDecoration: "none",
+    textUnderlineOffset: 2,
+    cursor: "pointer",
+  },
   snippet: {
     margin: 0,
     padding: "12px",

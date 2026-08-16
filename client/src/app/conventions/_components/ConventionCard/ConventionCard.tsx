@@ -6,6 +6,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Card, Button, IconBtn, PercentProgress } from "@devdigest/ui";
 import type { ConventionCandidate } from "@devdigest/shared";
+import { githubBlobUrl, type RepoRef } from "./helpers";
 import { s } from "./styles";
 
 function confidenceColor(confidence: number): string {
@@ -20,16 +21,21 @@ export function ConventionCard({
   onReject,
   onEdit,
   busy = false,
+  repo = null,
 }: {
   convention: ConventionCandidate;
   onAccept: () => void;
   onReject: () => void;
   onEdit: () => void;
   busy?: boolean;
+  /** Active repo's GitHub coordinates, so the evidence path can link to the
+      file on GitHub. When absent, the path renders as plain text. */
+  repo?: RepoRef | null;
 }) {
   const t = useTranslations("conventions.card");
   const accepted = convention.status === "accepted";
   const rejected = convention.status === "rejected";
+  const evidenceUrl = githubBlobUrl(repo, convention.evidence_path);
 
   return (
     <Card pad={false} style={s.card}>
@@ -40,9 +46,22 @@ export function ConventionCard({
             <IconBtn icon="Edit" label={t("edit")} onClick={onEdit} />
           </div>
           <div style={s.evidence}>
-            <span className="mono" style={s.path}>
-              {convention.evidence_path}
-            </span>
+            {evidenceUrl ? (
+              <a
+                className="mono"
+                style={s.pathLink}
+                href={evidenceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={t("openOnGitHub", { path: convention.evidence_path })}
+              >
+                {convention.evidence_path}
+              </a>
+            ) : (
+              <span className="mono" style={s.path}>
+                {convention.evidence_path}
+              </span>
+            )}
             <pre className="mono" style={s.snippet}>
               {convention.evidence_snippet}
             </pre>

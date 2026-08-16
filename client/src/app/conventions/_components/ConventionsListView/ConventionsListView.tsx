@@ -126,6 +126,7 @@ export function ConventionsListView() {
                 key={c.id}
                 convention={c}
                 busy={busy}
+                repo={activeRepo}
                 onAccept={() => accept.mutate(c.id)}
                 onReject={() => reject.mutate(c.id)}
                 onEdit={() => setEditing(c)}

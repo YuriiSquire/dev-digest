@@ -18,7 +18,15 @@ const CONV: ConventionCandidate = {
   accepted: false,
 };
 
-function renderCard(convention = CONV, onAccept = vi.fn(), onReject = vi.fn(), onEdit = vi.fn()) {
+const REPO = { owner: "acme", name: "widgets", default_branch: "main" };
+
+function renderCard(
+  convention = CONV,
+  onAccept = vi.fn(),
+  onReject = vi.fn(),
+  onEdit = vi.fn(),
+  repo: typeof REPO | null = null,
+) {
   render(
     <NextIntlClientProvider locale="en" messages={{ conventions: messages }}>
       <ConventionCard
@@ -26,6 +34,7 @@ function renderCard(convention = CONV, onAccept = vi.fn(), onReject = vi.fn(), o
         onAccept={onAccept}
         onReject={onReject}
         onEdit={onEdit}
+        repo={repo}
       />
     </NextIntlClientProvider>,
   );
@@ -67,5 +76,22 @@ describe("ConventionCard", () => {
     const rejectBtn = screen.getByRole("button", { name: "Rejected" });
     expect(rejectBtn).toBeInTheDocument();
     expect(rejectBtn).toHaveStyle({ background: "var(--crit)" });
+  });
+
+  it("renders the evidence path as a GitHub link when repo info is provided", () => {
+    renderCard(CONV, vi.fn(), vi.fn(), vi.fn(), REPO);
+    const link = screen.getByRole("link", { name: /src\/api\/users\.ts:23-31/ });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://github.com/acme/widgets/blob/main/src/api/users.ts#L23-L31",
+    );
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("renders the evidence path as plain text (no link) without repo info", () => {
+    renderCard();
+    expect(screen.getByText("src/api/users.ts:23-31")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 });
