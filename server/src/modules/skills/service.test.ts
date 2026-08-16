@@ -96,6 +96,30 @@ describe('importFromUrl SSRF guard', () => {
   });
 });
 
+describe('create source provenance', () => {
+  it("defaults source to 'manual'", async () => {
+    const { service, repo } = makeService();
+    await service.create('w1', { name: 'Hand-authored', body: 'x' });
+    expect(repo.inserted[0]).toMatchObject({ source: 'manual' });
+  });
+
+  it("honors an explicit source (e.g. 'extracted' for conventions-promotion)", async () => {
+    const { service, repo } = makeService();
+    await service.create('w1', {
+      name: 'From conventions',
+      type: 'convention',
+      body: 'x',
+      source: 'extracted',
+      evidence_files: ['src/a.ts'],
+    });
+    expect(repo.inserted[0]).toMatchObject({
+      source: 'extracted',
+      type: 'convention',
+      evidenceFiles: ['src/a.ts'],
+    });
+  });
+});
+
 describe('importFromText defaults', () => {
   it('derives the name from the heading, defaults type=custom, source=extracted, disabled', async () => {
     const { service, repo } = makeService();

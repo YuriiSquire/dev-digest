@@ -1,5 +1,5 @@
 import type { Container } from '../../platform/container.js';
-import type { CommunitySkill, Skill, SkillStats, SkillType } from '@devdigest/shared';
+import type { CommunitySkill, Skill, SkillSource, SkillStats, SkillType } from '@devdigest/shared';
 import { SkillsRepository } from './repository.js';
 import { toSkillDto, nameFromHeading, assertSafeUrl } from './helpers.js';
 import { COMMUNITY_SKILLS, DEFAULT_SKILL_TYPE } from './constants.js';
@@ -25,6 +25,8 @@ export interface CreateSkillInput {
   body: string;
   enabled?: boolean;
   evidence_files?: string[] | null;
+  /** Provenance. Defaults to 'manual'; conventions-promotion passes 'extracted'. */
+  source?: SkillSource;
 }
 
 export interface UpdateSkillInput {
@@ -62,14 +64,15 @@ export class SkillsService {
     return this.repo.deleteById(workspaceId, id);
   }
 
-  /** Create a hand-authored skill (source 'manual'). */
+  /** Create a skill. Source defaults to 'manual' (hand-authored); callers such as
+   *  conventions-promotion pass 'extracted' for provenance. */
   async create(workspaceId: string, input: CreateSkillInput): Promise<Skill> {
     const row = await this.repo.insert({
       workspaceId,
       name: input.name,
       ...(input.description !== undefined ? { description: input.description } : {}),
       type: input.type ?? DEFAULT_SKILL_TYPE,
-      source: 'manual',
+      source: input.source ?? 'manual',
       body: input.body,
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
       ...(input.evidence_files !== undefined ? { evidenceFiles: input.evidence_files } : {}),
