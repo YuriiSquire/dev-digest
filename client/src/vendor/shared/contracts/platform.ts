@@ -160,7 +160,7 @@ export const PrMeta = z.object({
   title: z.string(),
   author: z.string(),
   branch: z.string(),
-  base: z.string(),
+  base: z.string().optional(),
   head_sha: z.string(),
   additions: z.number().int(),
   deletions: z.number().int(),
