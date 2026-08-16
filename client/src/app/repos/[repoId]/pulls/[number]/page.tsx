@@ -146,7 +146,7 @@ export default function PRDetailPage() {
             prRuns={prRuns}
             prCommits={pr.commits}
             repoFullName={repoFullName}
-            headSha={pr.head_sha}
+            headSha={pr.headSha}
             cancelMutation={cancel}
             onOpenTrace={(id) => setParam("trace", id)}
             onDelete={(id) => {

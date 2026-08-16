@@ -53,7 +53,7 @@ export class OctokitGitHubClient implements GitHubClient {
             author: pr.user?.login ?? 'unknown',
             branch: pr.head.ref,
             base: pr.base.ref,
-            head_sha: pr.head.sha,
+            headSha: pr.head.sha,
             additions: 0,
             deletions: 0,
             files_count: 0, // not present on the list payload; populated by getPullRequest
@@ -95,7 +95,7 @@ export class OctokitGitHubClient implements GitHubClient {
             author: pr.user?.login ?? 'unknown',
             branch: pr.head.ref,
             base: pr.base.ref,
-            head_sha: pr.head.sha,
+            headSha: pr.head.sha,
             additions: pr.additions,
             deletions: pr.deletions,
             files_count: pr.changed_files,
