@@ -160,12 +160,18 @@ export const SkillStats = z.object({
 export type SkillStats = z.infer<typeof SkillStats>;
 
 // ---- Conventions ----
+export const ConventionStatus = z.enum(['pending', 'accepted', 'rejected']);
+export type ConventionStatus = z.infer<typeof ConventionStatus>;
+
 export const ConventionCandidate = z.object({
   id: z.string(),
+  category: z.string(),
   rule: z.string(),
   evidence_path: z.string(),
   evidence_snippet: z.string(),
   confidence: z.number().min(0).max(1),
+  status: ConventionStatus,
+  // Mirrors `status === 'accepted'`; kept for back-compat with the original shape.
   accepted: z.boolean(),
 });
 export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
