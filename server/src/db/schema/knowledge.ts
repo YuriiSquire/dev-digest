@@ -34,9 +34,17 @@ export const conventions = pgTable('conventions', {
     .notNull()
     .references(() => workspaces.id, { onDelete: 'cascade' }),
   repoId: uuid('repo_id').references(() => repos.id, { onDelete: 'cascade' }),
+  category: text('category'),
   rule: text('rule').notNull(),
   evidencePath: text('evidence_path'),
   evidenceSnippet: text('evidence_snippet'),
   confidence: doublePrecision('confidence'),
+  // Lifecycle: canonical accept/reject state. `accepted` mirrors status==='accepted'.
+  status: text('status', { enum: ['pending', 'accepted', 'rejected'] })
+    .notNull()
+    .default('pending'),
   accepted: boolean('accepted').notNull().default(false),
+  // Groups the candidates of one scan so a re-scan cleanly replaces the prior set.
+  extractionRunId: uuid('extraction_run_id'),
+  createdAt: now(),
 });
