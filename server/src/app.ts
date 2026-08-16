@@ -64,7 +64,18 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
-  const container = new Container(config, db, opts.overrides);
+  // TEST-ONLY: when E2E_FIXTURES=1, inject deterministic mock LLM + clone so the
+  // hermetic browser suite can drive the Conventions Extractor without a real key
+  // or clone. Strictly gated on the env flag — inert on every normal boot.
+  // Explicit `opts.overrides` still win (so unit/it-tests keep full control).
+  let overrides = opts.overrides;
+  if (process.env.E2E_FIXTURES === '1') {
+    const { e2eFixtureOverrides } = await import('./platform/e2e-fixtures.js');
+    overrides = { ...e2eFixtureOverrides(), ...opts.overrides };
+    app.log.warn('E2E_FIXTURES=1 — injecting mock LLM + clone (test-only)');
+  }
+
+  const container = new Container(config, db, overrides);
   app.decorate('container', container);
 
   // Reap runs left 'running' by a previous (now-dead) process — otherwise they
