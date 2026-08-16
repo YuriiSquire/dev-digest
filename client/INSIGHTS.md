@@ -42,6 +42,18 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-16** — `@devdigest/ui` `Modal` (`vendor/ui/kit/Modal.tsx`) pads only
+  its HEADER (`18px 24px`); the children slot is a bare
+  `<div style={{ flex:1, overflow:auto }}>` with **zero padding**. So every modal
+  must pad its OWN body — the skills `CreateSkillModal` does (`body: { padding: 24 }`),
+  but the conventions `CreateSkillFromConventionsModal` forgot it, leaving content
+  flush at the modal edge (measured `nameLeftInset` 1px vs the title's 25px) —
+  looked broken/unaligned. Fix: `s.body` needs `padding: 24` to line the content
+  up with the header title. Also set the modal `width` explicitly (the primitive
+  defaults to 720; the conventions modal wanted 960 so the merged-from banner
+  fits one line — 640 wrapped it).
+  `client/src/app/conventions/_components/CreateSkillFromConventionsModal/{styles,constants}.ts`
+
 - **2026-08-15** — The sidebar `NAV` groups are defined ONLY in vendored
   `client/src/vendor/ui/nav.ts` and consumed directly by the vendored `Sidebar`
   plus app-shell `useGlobalShortcuts`/`useShellCommands` — there is NO app-level
@@ -78,6 +90,27 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-08-16** — `@devdigest/ui`'s `Textarea` kit primitive hard-codes its own
+  `border`/`borderRadius` and exposes **no `style` prop**
+  (`client/src/vendor/ui/kit/Textarea.tsx`), so nesting it inside a bordered
+  "code panel" (filename header + body, per the skill-editor design) double-borders
+  and can't be fixed via props. To get the design's single unified panel, mirror
+  the diff-viewer `FileCard` pattern instead: a bordered container
+  (`border`+`borderRadius`+`overflow:hidden`) with a header row (`borderBottom`)
+  and a **raw borderless `<textarea className="mono">`** as the body — same
+  plain-mono rendering ConfigTab uses, no primitive. `FileCard` is the canonical
+  borderless-body panel: `client/src/components/diff-viewer/FileCard/FileCard.tsx:56`
+  and `client/src/components/diff-viewer/styles.ts:8` (`fileCard`/`fileHeader`/`fileBody`).
+  `client/src/app/conventions/_components/CreateSkillFromConventionsModal/CreateSkillFromConventionsModal.tsx:147`
+
+- **2026-08-16** — `@devdigest/ui`'s `icon` prop (on `Button`, `IconBtn`, etc.)
+  only accepts keys of the exported `Icon` map, NOT raw lucide names. `Pencil`
+  is imported from lucide but surfaced only as the alias `Edit` (`icons.tsx`:
+  `Edit: Pencil`), so `icon="Pencil"` fails typecheck with
+  `TS2322: Type '"Pencil"' is not assignable to type ...`. Pick from the `Icon`
+  map keys (`IconName`), not lucide — grep `client/src/vendor/ui/icons.tsx` for
+  the real key. `client/src/vendor/ui/icons.tsx:146`
+
 - **2026-08-12** — Supersedes the seed claim in the 2026-08-04 note below: the
   seed CHANGED. The active seeded repo is now
   `squire-technologies/squire-mobile-commander` (old `acme/payments-api` still
@@ -107,6 +140,24 @@ _None yet._
   a small driver script is the fallback for one-off browser verification here.
 
 ## Recurring Errors & Fixes
+
+- **2026-08-16** — RTL matches per text node: `getByText`'s `getNodeText`
+  joins only a node's DIRECT text-node children (element children are excluded).
+  Three consequences, all hit in this modal's test:
+  (1) emphasizing part of an i18n string with `t.rich` (a `<b>`/`<strong>` chunk
+  around a plural count) splits the sentence across sibling nodes, so a
+  whole-phrase `getByText(/Merged from N …/)` stops matching — assert the bolded
+  chunk alone (`getByText("2 accepted conventions")`).
+  (2) the skill `body` now renders as a read-only highlighted PREVIEW (per-line
+  `<span>`s), not a `<textarea>`: `getByText(/composed line/)` matches a
+  **code-free** line's text span and the accent heading (`# payments-api-conventions`)
+  and the gutter line number (`getByText("1")`), but a line containing an
+  inline-`` `code` `` chip splits across child `<span>`s so `getByText` on the
+  whole line WON'T match — assert a code-free line, the heading, or the gutter.
+  Click the Edit toggle (`getByRole("button", {name: /^Edit$/})`) to reveal the
+  `<textarea>`, then use `getByDisplayValue` (a controlled textarea's value is a
+  DOM property, not `textContent`).
+  `client/src/app/conventions/_components/CreateSkillFromConventionsModal/CreateSkillFromConventionsModal.test.tsx:47`
 
 - **2026-08-12** — Asserting content from a **lazily-fetched** dropdown (a data
   hook mounted only once the popover opens) that opens on a `setTimeout` HOVER

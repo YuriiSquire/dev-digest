@@ -54,6 +54,17 @@ _None yet._
 
 ## What Doesn't Work
 
+- **2026-08-16** — In the HERMETIC suite, flows `04`/`05` intermittently fail at
+  their shared step `find text "Add rate limiting to public API endpoints" click`
+  (the PR-title link): agent-browser's `find text` misses text React splits across
+  nested styled spans, so the click is nondeterministic — one run fails `04` while
+  `05` passes, a re-run flips it. NOT a regression from your change (confirmed by
+  toggling `E2E_FIXTURES` off/on: the failure floats between `04` and `05`
+  regardless, and `09` is unaffected). This is distinct from the dev-DB multi-repo
+  gotcha in `CLAUDE.md` — it reproduces on the freshly-seeded single-repo stack.
+  Harden with `find role link --name` or `snapshot`+`@ref`.
+  `e2e/specs/04-pr-findings.flow.json`, `e2e/specs/05-pr-diff.flow.json`
+
 - **2026-08-15** — `08-pr-list-findings.flow.json` fails on this repo regardless
   of the working tree: its step `find role button hover --name "6 findings"`
   HOVERS the findings cell, but `PRFindingsCell` moved to a CLICK trigger (see
@@ -77,6 +88,18 @@ _None yet._
   `server/src/db/seed.ts`, `e2e/specs/08-pr-list-findings.flow.json`
 
 ## Tool & Library Notes
+
+- **2026-08-16** — `@devdigest/ui` `Modal` scrolls its body in an INTERNAL
+  `overflow-y:auto` container, so a tall modal (e.g. the create-skill modal) is
+  clipped at the fold and `agent-browser screenshot` shows only the top —
+  **`screenshot --full` does NOT help** (it expands the page, not the modal's own
+  scroll region), and window `scroll down` doesn't move it either. To capture
+  below-the-fold modal content, scroll a node INSIDE the modal into view first:
+  `agent-browser eval "const e=[...document.querySelectorAll('*')].filter(x=>x.textContent?.includes('<unique text>')&&x.children.length<=2).pop(); e&&e.scrollIntoView({block:'center'}); 'ok'"`
+  then `screenshot`. Burned several capture attempts before this; don't conclude a
+  modal section is missing/unstyled from a cropped shot. Match a candidate by a
+  UNIQUE substring (a FormField `<label>`'s text carries a trailing required `*`,
+  so `textContent==='Skill body'` misses — use `includes`).
 
 - **2026-08-15** — agent-browser pointer `click @ref` silently NO-OPS on a button
   inside a `Drawer`/`Modal` portal (the "Import skill" button): the click returns

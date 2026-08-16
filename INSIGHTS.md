@@ -74,6 +74,20 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## What Works
 
+- **2026-08-16** — To drive an LLM-backed feature through the hermetic e2e browser
+  suite (which boots key-free + read-only, so any real provider call 500s), gate a
+  fixture injection on an env flag in `buildApp`: when `process.env.E2E_FIXTURES
+  === '1'`, `overrides = { ...e2eFixtureOverrides(), ...opts.overrides }` (explicit
+  test overrides still win — spread last). `e2eFixtureOverrides()`
+  (`server/src/platform/e2e-fixtures.ts`) returns a `MockLLMProvider` keyed by
+  `structuredBySchema[<schemaName>]` + a `MockGitClient({ files })`; set the flag in
+  `scripts/e2e.sh` (overridable: `export E2E_FIXTURES="${E2E_FIXTURES-1}"`) and the
+  CI env (`.github/workflows/e2e-web.yml`). Keep it STRICTLY behind the flag — it
+  imports `adapters/mocks.ts` into the boot path but never runs otherwise. Note the
+  injection is GLOBAL (whole container), so scope fixtures to the feature under test
+  and don't rely on the real git/LLM in the same run. Used for the Conventions
+  Extractor "Re-scan": `server/src/app.ts`, `e2e/specs/09-conventions.flow.json`.
+
 - **2026-08-14** — When building research-backed docs/skills from subagent web
   research, spot-check claim→source FIDELITY by re-fetching the cited pages — not
   just that the URLs resolve. A URL-reachability pass (`curl -sI`, 30/31 `200`) on
@@ -89,6 +103,18 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 _None yet._
 
 ## Codebase Patterns
+
+- **2026-08-16** — The per-feature model registry `FEATURE_MODELS` has **THREE**
+  in-sync copies, not the usual two: `server/src/vendor/shared/contracts/platform.ts`
+  (source of truth), `client/src/vendor/shared/contracts/platform.ts`, AND
+  `client/src/lib/feature-models.ts`. The third exists because it's a runtime
+  VALUE, not just a type — the client can only import TYPES from vendored shared
+  (importing the value pulls `vendor/shared/index.ts` into the webpack bundle,
+  whose `./contracts/*.js` re-exports Next can't resolve), so the Settings UI
+  reads its own local mirror. Changing a feature's default provider/model (e.g.
+  `conventions` → `openrouter`/`deepseek/deepseek-v4-flash`) means editing all
+  three; miss the client-lib copy and Settings → Feature Models silently shows the
+  stale default. `client/src/lib/feature-models.ts:1-12` (comment explains why).
 
 - **2026-08-14** — `feat/*` branches fork from **`develop`, not `main`** — this repo
   is GitFlow, which contradicts root `CLAUDE.md` ("Main branch (you will usually use

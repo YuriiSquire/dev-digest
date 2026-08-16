@@ -51,6 +51,17 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-16** — `getConventionSamples` (and every rank-driven file sample)
+  EXCLUDES config files: `JUNK_PATH_PATTERNS` substring-drops `.config.`,
+  `eslint`, `prettier` (alongside tests / `.d.ts` / `/migrations/`) before
+  returning the top-`file_rank` paths. Counterintuitive for a *convention*
+  extractor — the most convention-dense files (`.eslintrc*`, `tsconfig.json`,
+  `.prettierrc*`) never appear in the sample, so an extractor must read those
+  directly from the clone (`RepoIntelRepository.getRepoBasics().clonePath` + the
+  `readClone` pattern), not via the sampler.
+  `server/src/modules/repo-intel/service.ts:723` (JUNK_PATH_PATTERNS), `:630`
+  (getConventionSamples).
+
 - **2026-08-12** — The PR-list FINDINGS column aggregates ACROSS agents by
   **summing the denormalized per-run counters** — never a JOIN over `findings`
   (consistent with the 2026-08-04 note below). `GET /repos/:id/pulls`
@@ -101,6 +112,61 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
+- **2026-08-16** — Changing a feature-model's default PROVIDER silently breaks any
+  it-test / fixture that injects its `MockLLMProvider` under a HARDCODED provider
+  key. When `conventions` flipped `openai` → `openrouter`/`deepseek/deepseek-v4-flash`
+  (`platform.ts` `FEATURE_MODELS`), `resolveFeatureModel` returned `openrouter`, so
+  `container.llm('openrouter')` bypassed the `openai`-only mock in
+  `conventions.it.test.ts` (`makeApp`) and `platform/e2e-fixtures.ts` and hit the
+  REAL provider — a configured `OPENROUTER_API_KEY` made it "succeed" with real,
+  non-deterministic output (e.g. "Enable strict type checking" citing
+  `tsconfig.json`), reddening 4/6 tests. Tell-tale: the file's runtime jumps from
+  ~3s to ~37s (real network latency). Fix: bind the mock under ALL provider keys
+  (`{ openai: m, anthropic: m, openrouter: m }`) so fixtures never couple to the
+  resolved provider. (Corrects an earlier note that called these "pre-existing /
+  unrelated" — they were a regression from the default swap, now green 7/7.)
+
+- **2026-08-16** — The conventions list visibly reorders when a suggestion is
+  accepted/rejected. Cause: `ConventionsRepository.listByRepo`
+  (`server/src/modules/conventions/repository.ts:47-53`) orders only by
+  `desc(confidence)` with no secondary tiebreaker — ties (all 8 seed rows sit
+  at `confidence = 1`, and real LLM scores commonly round to the same 0.8/0.9)
+  get an unstable order from Postgres, and an `UPDATE` (the accept/reject
+  write) is exactly when that order is likely to shift. Confirmed NOT a client
+  bug: `client/src/lib/hooks/conventions.ts:31-38` just invalidates + refetches
+  (no optimistic write), and `ConventionsListView.tsx:118-127` renders with a
+  stable `key={c.id}`, no re-sort. **Fixed 2026-08-16 in
+  `repository.ts:54`** — `.orderBy(desc(confidence), asc(createdAt), asc(id))`.
+  NOTE: `asc(createdAt)` alone is INERT as a tiebreaker here — `now()`
+  (`db/schema/_shared.ts`) is `defaultNow()`, i.e. Postgres transaction-start
+  time, so a scan's single-statement `insertMany` gives every candidate the
+  IDENTICAL `created_at`; combined with confidence ties this leaves heap order
+  to break the tie. `asc(id)` (unique PK, never mutated) is the key that
+  actually pins the order. Any list query over a batch-inserted table needs a
+  unique final key, not `created_at`. Regression lock:
+  `conventions.it.test.ts` "list order is stable across an accept".
+
+- **2026-08-16** — `pnpm db:migrate` printing `✓ migrations applied` (or even
+  succeeding after a prior fix) is not proof the live schema matches
+  `src/db/schema/*.ts` — this local dev DB's history has old, never-cleanly-
+  reconciled schema drift, and it resurfaces per-table as new migrations get
+  generated. Second occurrence: after fixing `agent_runs` (missing
+  `critical_count`/etc.), the next restart hit `column "category" of relation
+  "conventions" already exists` from a freshly generated, UNCOMMITTED
+  `0013_famous_the_anarchist.sql` — the live `conventions` table already had
+  `category`/`status` (with the wrong default, `'accepted'` not the
+  schema's `'pending'`) from old leftover history, but was missing
+  `accepted`/`extraction_run_id`/`created_at` that the schema actually wants.
+  Diagnose the same way each time: `shasum -a 256
+  server/src/db/migrations/*.sql` vs `select hash from
+  drizzle.__drizzle_migrations` in the container; for any file whose hash is
+  missing, `\d <table>` to see which of its columns are already there vs
+  genuinely missing, apply only the missing ones (`ADD COLUMN IF NOT EXISTS`,
+  fix defaults with `ALTER COLUMN ... SET DEFAULT`), then insert the file's
+  real hash into `drizzle.__drizzle_migrations` so it isn't retried. Treat any
+  freshly-generated, `git status`-untracked migration file as suspect for this
+  exact failure mode before assuming it's a clean apply.
+
 - **2026-08-15** — `duplicate key value violates unique constraint
   "agent_skills_agent_id_skill_id_pk"` on skill drag-reorder had TWO causes, fix
   BOTH: (1) `AgentsRepository.setSkills` did a bare delete-then-insert — two
@@ -114,4 +180,10 @@ _None yet._
 
 ## Open Questions
 
-_None yet._
+- **2026-08-16** — `server/src/modules/conventions/` (the whole module, not just
+  one file) is **untracked in git** (`git status --short` shows `?? src/modules/
+  conventions/`), even though it's a real, working feature with its own schema
+  table, repository, and `.it.test.ts` — not scratch/WIP debris. Confirm with
+  whoever owns it whether this is intentional (e.g. deliberately kept local
+  during dev) before anyone runs `git clean` or checks out a fresh worktree —
+  either would silently delete it, migration fix included.
