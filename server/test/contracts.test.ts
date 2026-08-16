@@ -204,7 +204,7 @@ describe('platform DTOs', () => {
         author: 'a',
         branch: 'b',
         base: 'main',
-        head_sha: 'sha',
+        headSha: 'sha',
         additions: 1,
         deletions: 0,
         files_count: 1,

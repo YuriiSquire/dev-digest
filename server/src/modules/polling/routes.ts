@@ -39,7 +39,7 @@ export default async function pollingRoutes(appBase: FastifyInstance) {
           author: pr.author,
           branch: pr.branch,
           base: pr.base,
-          headSha: pr.head_sha,
+          headSha: pr.headSha,
           additions: pr.additions,
           deletions: pr.deletions,
           filesCount: pr.files_count,
@@ -50,7 +50,7 @@ export default async function pollingRoutes(appBase: FastifyInstance) {
           target: [t.pullRequests.repoId, t.pullRequests.number],
           set: {
             title: pr.title,
-            headSha: pr.head_sha,
+            headSha: pr.headSha,
             status: pr.status,
             updatedAt: pr.updated_at ? new Date(pr.updated_at) : null,
           },
