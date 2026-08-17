@@ -34,6 +34,9 @@ env:
   DATABASE_URL: postgres://devdigest:devdigest@localhost:5432/devdigest
   NEXT_PUBLIC_API_BASE: http://localhost:3001
   E2E_BASE_URL: http://localhost:3000
+  # Deterministic mock LLM + clone so the Conventions Extractor flow runs
+  # key-free. TEST-ONLY: honored only by buildApp's E2E_FIXTURES guard.
+  E2E_FIXTURES: "1"
 
 jobs:
   e2e:

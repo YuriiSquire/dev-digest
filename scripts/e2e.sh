@@ -41,6 +41,10 @@ export DATABASE_URL="postgres://${PG_USER}:${PG_PASS}@127.0.0.1:${PG_PORT}/${PG_
 export API_PORT WEB_PORT
 export NEXT_PUBLIC_API_BASE="http://localhost:${API_PORT}"
 export E2E_BASE_URL="http://localhost:${WEB_PORT}"
+# Inject deterministic mock LLM + clone so the Conventions Extractor flow (Re-scan)
+# runs without a real key/clone. TEST-ONLY: honored only by buildApp's guard.
+# Overridable (e.g. E2E_FIXTURES= to reproduce the key-free baseline).
+export E2E_FIXTURES="${E2E_FIXTURES-1}"
 
 log()  { printf '\033[1;36m▸ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m! %s\033[0m\n' "$*"; }

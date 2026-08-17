@@ -1,0 +1,26 @@
+{
+  "name": "Conventions Extractor — scan, accept, and create a skill",
+  "description": "Drives the /conventions screen end-to-end against the E2E_FIXTURES mock LLM + clone: Re-scan renders the grounded candidates, accept one, then create a skill from the accepted conventions and land it in the Skills Lab. Captures screenshots for the design review.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/conventions"], "label": "open the Conventions screen" },
+    { "cmd": ["wait", "--url", "/conventions"], "label": "on the conventions route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "page data settles" },
+    { "cmd": ["wait", "--text", "Conventions in"], "label": "the page header renders" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Re-scan"], "label": "run extraction" },
+    { "cmd": ["wait", "--text", "Always use async/await instead of .then() chains"], "label": "the first grounded convention card renders" },
+    { "cmd": ["wait", "--text", "All public route handlers return typed Result<T, ApiError>"], "label": "the second convention card renders" },
+    { "cmd": ["wait", "--text", "src/api/users.ts:23-31"], "label": "evidence file:line is shown" },
+    { "cmd": ["wait", "--text", "91%"], "label": "the confidence bar shows a percentage" },
+    { "cmd": ["screenshot", "test-results/09-conventions-list.png"], "label": "capture the list for the design review" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Accept"], "label": "accept a convention" },
+    { "cmd": ["wait", "--text", "Accepted"], "label": "the accepted state is reflected" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Create skill"], "label": "open the create-skill modal" },
+    { "cmd": ["wait", "--text", "Create skill from conventions"], "label": "the modal opened" },
+    { "cmd": ["wait", "--text", "Merged from"], "label": "the merged-from banner is shown" },
+    { "cmd": ["wait", "--text", "tokens"], "label": "the live token count renders" },
+    { "cmd": ["screenshot", "test-results/09-conventions-modal.png"], "label": "capture the modal for the design review" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Create skill"], "label": "submit — create the skill" },
+    { "cmd": ["wait", "--url", "/skills"], "label": "routed to the Skills Lab after creating" },
+    { "cmd": ["wait", "--text", "-conventions"], "label": "the new convention skill is listed" }
+  ]
+}
