@@ -201,6 +201,19 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
+- **2026-08-16** — Running `git checkout <branch>` inside the repo directory that
+  a live `pnpm dev` (server tsx watch) / `next dev` is already serving from
+  reloads that process onto the checked-out branch's code — there is no
+  isolation between "the repo on disk" and "what the running dev stack
+  executes". Checking out `main` to build a demo PR silently downgraded the
+  live server to `main`'s code (missing a feature present on the working
+  branch — see the server `INSIGHTS.md` entry on `run-executor.ts` skill
+  wiring) until it was switched back. Fix: for any throwaway/demo work on a
+  branch that must NOT be the one currently backing a running dev instance,
+  use a separate `git worktree` instead of `checkout`-ing in place, and
+  `git checkout <original-branch>` immediately afterward if you did check out
+  in place.
+
 - **2026-08-15** — `gh pr create` fails here with a misleading `No commits between
   develop and <branch> / Head ref must be a branch / Base/Head sha can't be blank`
   because **git `origin` and the `gh` default repo differ**: `origin` is the fork

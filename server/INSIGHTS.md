@@ -47,9 +47,56 @@ _None yet._
 
 ## What Doesn't Work
 
-_None yet._
+- **2026-08-16** — A skills-vs-no-skills A/B on the "API Contract Reviewer"
+  agent (`deepseek/deepseek-v4-flash`) does NOT differentiate when the target PR
+  is a *blatant* contract break. Tested on dev-digest PR #3 (renames response
+  field `head_sha` → `headSha` in the `PrMeta` Zod contract): unbinding all 4
+  skills (`POST /agents/:id/skills {"skill_ids":[]}`), reviewing, then re-binding
+  and reviewing again gave an **identical** verdict both ways — 1 CRITICAL
+  finding, `verdict: "request_changes"` — even though the skills were genuinely
+  injected (trace `prompt_assembly.skills` is a ~3.5k-char string with the
+  breaking-change rule, vs `null` when unbound). Skills only *enriched* the
+  rationale (WITH cites "violates API contract stability rules" + sunset/semver
+  framing; WITHOUT already said "no deprecation window / no major version bump").
+  Cause: the change is announced verbatim in the PR title/description and the
+  agent's own system prompt ("API Contract Reviewer") already primes it, so the
+  base model catches it unaided. To demonstrate skills changing catch-vs-miss you
+  need a **subtle** contract change the base model misses on its own — a rename
+  spelled out in the PR text is the wrong probe. Run ids: `78726d1b…` (no skills,
+  $0.00042), `01992df8…` (skills, $0.00049). `GET /runs/:id/trace` → `stats` +
+  `raw_output`.
+
+- **2026-08-16** — Sequel to the entry above: the skills DO flip miss→catch, but
+  only with the right probe AND a non-primed agent. Probe that works: flip a
+  *required* response field to optional — `PrMeta.base: z.string()` →
+  `z.string().optional()` (fork PR `YuriiSquire/dev-digest#4`). It is zero
+  typecheck-cascade (a definite value is still assignable to an optional field,
+  and `base` is only read as JSX text client-side), squarely in the
+  `response-schema` rubric ("required-ness changed … or vice versa"), yet
+  benign-looking so a neutral reviewer waves it through. On a FRESH generic agent
+  (neutral "review this PR" prompt, same `deepseek/deepseek-v4-flash`) it flipped
+  cleanly: no skills → `verdict:"approve"`, one WARNING, let through (run
+  `1375d8f7…`, $0.00072); 4 skills bound → `verdict:"request_changes"`, 2 CRITICAL
+  (breaking-change + missing semver bump) (run `f9b152c6…`, $0.00097). On the real
+  "API Contract Reviewer" agent there was NO flip — CRITICAL/request_changes both
+  ways (`c7bbd501…` no-skills / `50adfcb4…` skills) because its own system prompt
+  already enumerates "narrowing a type / optional→required", so isolate the
+  skills' effect on a generic agent, not this one. Wrong probe: a constraint
+  refinement like `title: z.string().max(72)` — NOT named by any rubric (so skills
+  add no signal) yet a generic no-skills agent still flags it by general reasoning
+  ("arbitrary limit rejects long PR titles"), so it never flips.
 
 ## Codebase Patterns
+
+- **2026-08-16** — [dev-data state] Not every seeded repo has reviewable diffs.
+  The `acme/payments-api` repo (id `789fd462…`, `last_polled_at: null`,
+  `clone_path: null`) returns PRs whose `GET /pulls/:id` gives **empty** files —
+  entries with `filename: null` / empty `patch`, or `files: []` (PRs #482, #501,
+  #517). Reviewing them yields a trivial "approve" with nothing to flag. Only
+  `YuriiSquire/dev-digest` and `squire-technologies/squire-mobile-commander`
+  (both with a non-null `last_polled_at`/`clone_path`) carry real per-file
+  patches. When picking a review target, confirm `GET /pulls/:id` actually
+  returns non-empty `files[].patch` before trusting the run.
 
 - **2026-08-16** — `getConventionSamples` (and every rank-driven file sample)
   EXCLUDES config files: `JUNK_PATH_PATTERNS` substring-drops `.config.`,
@@ -111,6 +158,28 @@ _None yet._
   re-running the failing file alone. `server/test/helpers/pg.ts`
 
 ## Recurring Errors & Fixes
+
+- **2026-08-16** — `origin/main` does NOT yet have the skill-injection wiring in
+  `run-executor.ts` (`agentsRepo.linkedSkills(agent.id)` → filter `enabled` →
+  insert `run_skills` → pass `skills: pulled.map(l => l.skill.body)` into
+  `reviewPullRequest`) — that only exists on feature branches (confirmed present
+  on `feat/lab2-hw`; PR #2 "feat(skills): reusable skills" merged to `develop`,
+  not `main`). On `main`, `run-executor.ts` hardcodes
+  `prompt_assembly: { skills: null, ... }` and never queries `agent_skills` at
+  all. Symptom: an agent shows skills correctly linked+enabled via
+  `GET /agents/:id/skills`, a review run completes normally, but `run_skills`
+  stays empty and the trace's `prompt_assembly.skills` is `null` — the skills
+  had zero effect on the LLM output even though the API reported them attached.
+  If testing agent+skill behavior, make sure the code actually executing is on a
+  branch that has this wiring, not `main`. `server/src/modules/reviews/run-executor.ts:189-219`.
+
+- **2026-08-16** — `GET /repos/:id/pulls` (list sync) does NOT persist per-file
+  patches — only `GET /pulls/:id` (detail) calls `getPullRequest` and writes
+  `pr_files.patch`. Triggering `POST /pulls/:id/review` right after only the list
+  sync gets an empty diff and the agent legitimately (and silently) returns
+  `verdict: "approve"` / 0 findings / "The diff is empty" — this looks like the
+  agent missed something but it was never shown a diff. Always `GET /pulls/:id`
+  once before the first review run on a freshly-synced PR. `server/src/modules/pulls/routes.ts`.
 
 - **2026-08-16** — Changing a feature-model's default PROVIDER silently breaks any
   it-test / fixture that injects its `MockLLMProvider` under a HARDCODED provider
